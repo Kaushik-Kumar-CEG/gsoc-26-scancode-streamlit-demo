@@ -24,13 +24,17 @@ st.set_page_config(
 @st.cache_resource(show_spinner="Loading model weights...")
 def get_cached_model():
     from transformers import AutoTokenizer, AutoModelForTokenClassification
+    import torch
     
     MODEL_ID = "Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large"
     
-    # We no longer need use_fast=False or a base tokenizer override.
-    # The fix in Step 1 allows the native fast tokenizer to work!
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    model = AutoModelForTokenClassification.from_pretrained(MODEL_ID)
+    
+    # Load in 16-bit precision to halve the RAM footprint
+    model = AutoModelForTokenClassification.from_pretrained(
+        MODEL_ID,
+        torch_dtype=torch.float16
+    )
     
     return model, tokenizer
 #_ = get_cached_model()  # force execution on boot — not lazy
