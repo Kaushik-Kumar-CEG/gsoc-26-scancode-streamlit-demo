@@ -20,7 +20,6 @@ st.set_page_config(
 )
 
 # ── model pre-warm on boot ───────────────────────────────────────────────────
-# loads ONNX model during Space boot so first click is instant
 @st.cache_resource(show_spinner="Loading model weights...")
 def get_cached_model():
     from transformers import AutoTokenizer, AutoModelForTokenClassification
@@ -29,15 +28,12 @@ def get_cached_model():
     MODEL_ID = "Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large"
     
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    
-    # Load in 16-bit precision to halve the RAM footprint
     model = AutoModelForTokenClassification.from_pretrained(
         MODEL_ID,
         torch_dtype=torch.float16
     )
     
     return model, tokenizer
-
 
 # ── example rules for quick testing ──────────────────────────────────────────
 EXAMPLES = {
@@ -64,7 +60,6 @@ EXAMPLES = {
 TIER_COLOR = {"auto": "#22c55e", "review": "#f59e0b", "reject": "#ef4444"}
 TIER_LABEL = {"auto": "High confidence", "review": "Moderate confidence", "reject": "Low confidence"}
 
-
 def highlight_phrase(rule_text, phrase):
     safe_text   = html.escape(rule_text)
     safe_phrase = html.escape(phrase)
@@ -75,9 +70,7 @@ def highlight_phrase(rule_text, phrase):
         r'<mark style="background:#fef3c7;padding:1px 4px;border-radius:3px;color:#92400e;font-weight:bold">\1</mark>',
         safe_text, flags=re.IGNORECASE, count=1,
     )
-    # Replace newlines with <br> to prevent Streamlit's Markdown parser from turning indented text into code blocks
     return highlighted.replace("\n", "<br>")
-
 
 def make_diff(original, phrase):
     import difflib
@@ -99,7 +92,6 @@ def make_diff(original, phrase):
             lines.append(f'<span style="color:#94a3b8">{esc}</span>')
     return "<br>".join(lines)
 
-
 # ── header ────────────────────────────────────────────────────────────────────
 st.markdown(
     "<div style='margin-bottom:2px'>"
@@ -108,9 +100,9 @@ st.markdown(
     "</span></div>",
     unsafe_allow_html=True,
 )
-st.title("License Required Phrase Detector")
+st.title("Scancode Required Phrase Extractor")
 st.markdown(
-    "<div style='margin-top:-10px;margin-bottom:4px'>"
+    "<div style='margin-top:-10px;margin-bottom:16px'>"
     "<span style='font-size:0.95em;color:#94a3b8'>by "
     "<a href='https://github.com/Kaushik-Kumar-CEG' style='color:#94a3b8;text-decoration:none'>"
     "Kaushik Kumar</a></span>"
@@ -118,11 +110,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.caption(
-    "Predicts which phrase in a `.RULE` file should be marked as a required phrase — "
-    "preventing false positive license detections in scancode-toolkit. "
-    "DeBERTa-v3-large · F1 0.7931 · 83.9% useful on unseen licenses."
+    "Predicts the required phrase boundary in a `.RULE` file to prevent false positive license detections. "
+    "DeBERTa-v3-large · F1 0.7931"
 )
-st.divider()
+
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ── example loader ────────────────────────────────────────────────────────────
 st.markdown("**Try an example:**")
@@ -132,7 +124,7 @@ for col, (label, (rtype, rtext)) in zip(cols, EXAMPLES.items()):
         st.session_state["rule_type"] = rtype
         st.session_state["rule_text"] = rtext
 
-st.markdown("")
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ── input ─────────────────────────────────────────────────────────────────────
 rule_type = st.session_state.get("rule_type", "is_license_notice")
@@ -141,14 +133,11 @@ rule_text = st.text_area(
     "Rule text",
     height=160,
     key="rule_text",
-    placeholder="Paste the body of a .RULE file here (the text below the `---` separator)...",
-    help="Do not include YAML frontmatter — just the license text body."
+    placeholder="Paste rule text here...",
+    label_visibility="collapsed"
 )
 
-st.caption(
-    "💡 `.RULE` file format: YAML frontmatter (license_expression, is_license_notice: yes, etc.) "
-    "followed by `---` then the plain rule text. Paste only the text part here."
-)
+st.caption("Note: Paste only the plain text body. Exclude YAML frontmatter and the `---` separator.")
 
 predict_btn = st.button("Predict Required Phrase", type="primary", use_container_width=True)
 
@@ -161,26 +150,23 @@ if predict_btn and rule_text.strip():
             import re
             
             if re.fullmatch(r'https?://\S+', rule_text.strip()):
-                st.info('URL-only rules are skipped — the model cannot extract a required phrase from a bare URL.')
+                st.info('URL-only rules are skipped — model cannot extract phrases from bare URLs.')
                 st.stop()
                 
             token_data, clean_text = run_inference(model, tokenizer, rule_type, rule_text)
             phrases_raw = extract_phrases(token_data, clean_text)
 
-            # deduplicate - keep highest confidence if same phrase appears twice
             seen = {}
             for text, conf, idx in phrases_raw:
                 if text not in seen or conf > seen[text][1]:
                     seen[text] = (text, conf, idx)
             phrases = list(seen.values())
-            
-            # BUG FIX: Sort by confidence (index 1) descending, so the highest probability is always first
             phrases.sort(key=lambda x: x[1], reverse=True)
 
             if not phrases:
                 st.warning("No recognizable license identifiers found in this rule.")
             else:
-                st.divider()
+                st.markdown("<br>", unsafe_allow_html=True)
                 st.markdown(f"**{len(phrases)} candidate phrase(s) found:**")
 
                 for phrase_text, conf, _ in phrases:
@@ -200,7 +186,7 @@ if predict_btn and rule_text.strip():
 
                 best = phrases[0][0]
 
-                st.markdown("**Highlighted in rule text:**")
+                st.markdown("<br>**Highlighted in rule text:**", unsafe_allow_html=True)
                 st.markdown(
                     f'<div style="font-family:monospace;white-space:pre-wrap;font-size:0.9em;'
                     f'background:#0f172a;color:#e2e8f0;padding:14px;border-radius:6px;'
@@ -209,8 +195,7 @@ if predict_btn and rule_text.strip():
                     unsafe_allow_html=True,
                 )
                 
-                # UI UPGRADE: Render the actual Git Diff
-                st.markdown("<br>**Proposed Output Diff:**", unsafe_allow_html=True)
+                st.markdown("<br>**Diff:**", unsafe_allow_html=True)
                 st.markdown(
                     f'<div style="font-family:monospace;white-space:pre-wrap;font-size:0.85em;'
                     f'background:#000000;color:#e2e8f0;padding:14px;border-radius:6px;'
@@ -227,7 +212,7 @@ elif predict_btn:
     st.warning("Please enter some rule text first.")
 
 # ── footer ────────────────────────────────────────────────────────────────────
-st.divider()
+st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown(
     "<div style='color:#475569;font-size:0.78em;text-align:center'>"
     "Powered by <a href='https://huggingface.co/Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large' "
