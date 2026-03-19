@@ -5,7 +5,7 @@
 #
 # Run locally: streamlit run app.py
 # (from scancode-toolkit root so add_ml_phrases.py is importable)
-
+import traceback
 import re
 import sys
 import html
@@ -211,6 +211,7 @@ if predict_btn and rule_text.strip():
 
         except Exception as e:
             st.error(f"Error: {e}")
+            st.code(traceback.format_exc(), language="python")
             st.info(
                 "If running locally, make sure `add_ml_phrases.py` is in `etc/scripts/` "
                 "and the ONNX model is cached. Run:  \n"
