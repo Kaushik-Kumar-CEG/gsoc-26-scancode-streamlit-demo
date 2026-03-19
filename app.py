@@ -24,18 +24,16 @@ st.set_page_config(
 # ── model pre-warm on boot ───────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Loading model weights...")
 def get_cached_model():
-    from transformers import AutoTokenizer, AutoModelForTokenClassification, AutoConfig
+    from transformers import AutoTokenizer, AutoModelForTokenClassification
     
     MODEL_ID = "Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large"
+    BASE_TOKENIZER = "microsoft/deberta-v3-large"
     
-    # 1. Intercept and fix the config BEFORE the model loads
-    config = AutoConfig.from_pretrained(MODEL_ID)
-    config.id2label = {0: "O", 1: "B-REQ", 2: "I-REQ"}
-    config.label2id = {"O": 0, "B-REQ": 1, "I-REQ": 2}
+    # 1. Load the clean base tokenizer to bypass the broken HF config file
+    tokenizer = AutoTokenizer.from_pretrained(BASE_TOKENIZER)
     
-    # 2. Load the model using our patched config
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    model = AutoModelForTokenClassification.from_pretrained(MODEL_ID, config=config)
+    # 2. Load your fine-tuned model weights as normal
+    model = AutoModelForTokenClassification.from_pretrained(MODEL_ID)
     
     return model, tokenizer
 #_ = get_cached_model()  # force execution on boot — not lazy
