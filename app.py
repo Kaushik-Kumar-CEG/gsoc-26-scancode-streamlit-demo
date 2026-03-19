@@ -26,12 +26,19 @@ st.set_page_config(
 def get_cached_model():
     from transformers import AutoTokenizer, AutoModelForTokenClassification
     
-    # For the web demo, we use standard PyTorch instead of ONNX.
-    # This bypasses the memory-heavy ONNX export step so it fits in Streamlit's 1GB RAM limit!
     MODEL_ID = "Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large"
     
+    # Force the correct dict format to bypass the Hugging Face list.keys() bug
+    correct_id2label = {0: "O", 1: "B-REQ", 2: "I-REQ"}
+    correct_label2id = {"O": 0, "B-REQ": 1, "I-REQ": 2}
+    
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    model = AutoModelForTokenClassification.from_pretrained(MODEL_ID)
+    model = AutoModelForTokenClassification.from_pretrained(
+        MODEL_ID,
+        id2label=correct_id2label,
+        label2id=correct_label2id,
+        ignore_mismatched_sizes=True # Safely overrides the config.json
+    )
     
     return model, tokenizer
 #_ = get_cached_model()  # force execution on boot — not lazy
