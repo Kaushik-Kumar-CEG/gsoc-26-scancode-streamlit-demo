@@ -30,14 +30,21 @@ import warnings
 import numpy as np
 from pathlib import Path
 
-repo_root = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(repo_root / 'src'))
+try:
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    if (repo_root / 'src').exists():
+        sys.path.insert(0, str(repo_root / 'src'))
 
-from licensedcode.models import Rule
-from licensedcode.required_phrases import (
-    add_required_phrase_to_rule,
-    RequiredPhraseRuleCandidate,
-)
+    from licensedcode.models import Rule
+    from licensedcode.required_phrases import (
+        add_required_phrase_to_rule,
+        RequiredPhraseRuleCandidate,
+    )
+except ImportError:
+    # Graceful fallback for the isolated Streamlit UI demo.
+    Rule = None
+    add_required_phrase_to_rule = None
+    RequiredPhraseRuleCandidate = None
 
 MODEL_ID = 'Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large'
 
