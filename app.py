@@ -24,21 +24,18 @@ st.set_page_config(
 # ── model pre-warm on boot ───────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Loading model weights...")
 def get_cached_model():
-    from transformers import AutoTokenizer, AutoModelForTokenClassification
+    from transformers import AutoTokenizer, AutoModelForTokenClassification, AutoConfig
     
     MODEL_ID = "Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large"
     
-    # Force the correct dict format to bypass the Hugging Face list.keys() bug
-    correct_id2label = {0: "O", 1: "B-REQ", 2: "I-REQ"}
-    correct_label2id = {"O": 0, "B-REQ": 1, "I-REQ": 2}
+    # 1. Intercept and fix the config BEFORE the model loads
+    config = AutoConfig.from_pretrained(MODEL_ID)
+    config.id2label = {0: "O", 1: "B-REQ", 2: "I-REQ"}
+    config.label2id = {"O": 0, "B-REQ": 1, "I-REQ": 2}
     
+    # 2. Load the model using our patched config
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    model = AutoModelForTokenClassification.from_pretrained(
-        MODEL_ID,
-        id2label=correct_id2label,
-        label2id=correct_label2id,
-        ignore_mismatched_sizes=True # Safely overrides the config.json
-    )
+    model = AutoModelForTokenClassification.from_pretrained(MODEL_ID, config=config)
     
     return model, tokenizer
 #_ = get_cached_model()  # force execution on boot — not lazy
