@@ -29,10 +29,10 @@ def get_cached_model():
     MODEL_ID = "Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large"
     BASE_TOKENIZER = "microsoft/deberta-v3-large"
     
-    # 1. Load the clean base tokenizer to bypass the broken HF config file
-    tokenizer = AutoTokenizer.from_pretrained(BASE_TOKENIZER)
+    # 1. Load the stable tokenizer, bypassing the buggy Rust "Fast" conversion
+    tokenizer = AutoTokenizer.from_pretrained(BASE_TOKENIZER, use_fast=False)
     
-    # 2. Load your fine-tuned model weights as normal
+    # 2. Load your fine-tuned model weights
     model = AutoModelForTokenClassification.from_pretrained(MODEL_ID)
     
     return model, tokenizer
