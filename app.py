@@ -37,7 +37,6 @@ def get_cached_model():
     )
     
     return model, tokenizer
-#_ = get_cached_model()  # force execution on boot — not lazy
 
 
 # ── example rules for quick testing ──────────────────────────────────────────
@@ -70,11 +69,14 @@ def highlight_phrase(rule_text, phrase):
     safe_text   = html.escape(rule_text)
     safe_phrase = html.escape(phrase)
     escaped     = re.escape(safe_phrase).replace(r"\ ", r"\s+")
-    return re.sub(
+    
+    highlighted = re.sub(
         f"({escaped})",
-        r'<mark style="background:#fef3c7;padding:1px 4px;border-radius:3px">\1</mark>',
+        r'<mark style="background:#fef3c7;padding:1px 4px;border-radius:3px;color:#92400e;font-weight:bold">\1</mark>',
         safe_text, flags=re.IGNORECASE, count=1,
     )
+    # Replace newlines with <br> to prevent Streamlit's Markdown parser from turning indented text into code blocks
+    return highlighted.replace("\n", "<br>")
 
 
 def make_diff(original, phrase):
@@ -83,17 +85,19 @@ def make_diff(original, phrase):
     orig_lines = original.splitlines(keepends=True)
     new_lines  = injected.splitlines(keepends=True)
     diff = list(difflib.unified_diff(orig_lines, new_lines,
-                                     fromfile="before", tofile="after", lineterm=""))
+                                     fromfile="a/rule.RULE", tofile="b/rule.RULE", lineterm=""))
     lines = []
     for line in diff:
         esc = html.escape(line)
         if line.startswith("+") and not line.startswith("+++"):
-            lines.append(f'<span style="color:#22c55e">{esc}</span>')
+            lines.append(f'<span style="color:#22c55e;font-weight:bold">{esc}</span>')
         elif line.startswith("-") and not line.startswith("---"):
             lines.append(f'<span style="color:#ef4444">{esc}</span>')
+        elif line.startswith("@@"):
+            lines.append(f'<span style="color:#60a5fa">{esc}</span>')
         else:
             lines.append(f'<span style="color:#94a3b8">{esc}</span>')
-    return "\n".join(lines)
+    return "<br>".join(lines)
 
 
 # ── header ────────────────────────────────────────────────────────────────────
@@ -155,9 +159,11 @@ if predict_btn and rule_text.strip():
             from add_ml_phrases import run_inference, extract_phrases
             model, tokenizer = get_cached_model()
             import re
+            
             if re.fullmatch(r'https?://\S+', rule_text.strip()):
                 st.info('URL-only rules are skipped — the model cannot extract a required phrase from a bare URL.')
                 st.stop()
+                
             token_data, clean_text = run_inference(model, tokenizer, rule_type, rule_text)
             phrases_raw = extract_phrases(token_data, clean_text)
 
@@ -167,10 +173,12 @@ if predict_btn and rule_text.strip():
                 if text not in seen or conf > seen[text][1]:
                     seen[text] = (text, conf, idx)
             phrases = list(seen.values())
-            phrases.sort(key=lambda x: x[2], reverse=True)
+            
+            # BUG FIX: Sort by confidence (index 1) descending, so the highest probability is always first
+            phrases.sort(key=lambda x: x[1], reverse=True)
 
             if not phrases:
-                st.warning("No required phrases predicted for this rule.")
+                st.warning("No recognizable license identifiers found in this rule.")
             else:
                 st.divider()
                 st.markdown(f"**{len(phrases)} candidate phrase(s) found:**")
@@ -184,16 +192,11 @@ if predict_btn and rule_text.strip():
                         f'<div style="border-left:3px solid {color};padding:8px 14px;'
                         f'margin:8px 0;border-radius:0 6px 6px 0;background:#0f172a">'
                         f'<code style="font-size:1.05em;color:#e2e8f0">{html.escape(phrase_text)}</code>'
-                        f'<br><span style="color:{color};font-size:0.85em">'
-                        f'{conf:.0%} · {label}</span>'
+                        f'<br><span style="color:{color};font-size:0.85em;font-weight:600">'
+                        f'{conf:.1%} · {label}</span>'
                         f'</div>',
                         unsafe_allow_html=True,
                     )
-                    st.markdown(
-                        f'<style>.stProgress > div > div > div > div {{background-color: {color};}}</style>',
-                        unsafe_allow_html=True,
-                    )
-                    st.progress(float(conf))
 
                 best = phrases[0][0]
 
@@ -205,17 +208,20 @@ if predict_btn and rule_text.strip():
                     f'{highlight_phrase(rule_text, best)}</div>',
                     unsafe_allow_html=True,
                 )
-
-
+                
+                # UI UPGRADE: Render the actual Git Diff
+                st.markdown("<br>**Proposed Output Diff:**", unsafe_allow_html=True)
+                st.markdown(
+                    f'<div style="font-family:monospace;white-space:pre-wrap;font-size:0.85em;'
+                    f'background:#000000;color:#e2e8f0;padding:14px;border-radius:6px;'
+                    f'border:1px solid #334155;line-height:1.6">'
+                    f'{make_diff(rule_text, best)}</div>',
+                    unsafe_allow_html=True,
+                )
 
         except Exception as e:
             st.error(f"Error: {e}")
             st.code(traceback.format_exc(), language="python")
-            st.info(
-                "If running locally, make sure `add_ml_phrases.py` is in `etc/scripts/` "
-                "and the ONNX model is cached. Run:  \n"
-                "`python etc/scripts/add_ml_phrases.py --all --limit 1 --dry-run`"
-            )
 
 elif predict_btn:
     st.warning("Please enter some rule text first.")
@@ -223,10 +229,10 @@ elif predict_btn:
 # ── footer ────────────────────────────────────────────────────────────────────
 st.divider()
 st.markdown(
-    "<div style='color:#475569;font-size:0.78em'>"
-    "Model: <a href='https://huggingface.co/Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large' "
-    "style='color:#475569'>scancode-required-phrases-deberta-large</a> · "
-    "<a href='https://github.com/Kaushik-Kumar-CEG' style='color:#475569'>github.com/Kaushik-Kumar-CEG</a>"
+    "<div style='color:#475569;font-size:0.78em;text-align:center'>"
+    "Powered by <a href='https://huggingface.co/Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large' "
+    "style='color:#475569'>scancode-required-phrases-deberta-large</a><br>"
+    "GitHub: <a href='https://github.com/Kaushik-Kumar-CEG' style='color:#475569'>Kaushik-Kumar-CEG</a>"
     "</div>",
     unsafe_allow_html=True,
 )
