@@ -21,18 +21,15 @@ st.set_page_config(
 
 # ── model pre-warm on boot ───────────────────────────────────────────────────
 # loads ONNX model during Space boot so first click is instant
-# ── model pre-warm on boot ───────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Loading model weights...")
 def get_cached_model():
     from transformers import AutoTokenizer, AutoModelForTokenClassification
     
     MODEL_ID = "Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large"
-    BASE_TOKENIZER = "microsoft/deberta-v3-large"
     
-    # 1. Load the stable tokenizer, bypassing the buggy Rust "Fast" conversion
-    tokenizer = AutoTokenizer.from_pretrained(BASE_TOKENIZER, use_fast=False)
-    
-    # 2. Load your fine-tuned model weights
+    # We no longer need use_fast=False or a base tokenizer override.
+    # The fix in Step 1 allows the native fast tokenizer to work!
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     model = AutoModelForTokenClassification.from_pretrained(MODEL_ID)
     
     return model, tokenizer
