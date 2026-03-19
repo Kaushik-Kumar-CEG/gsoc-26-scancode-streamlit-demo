@@ -215,7 +215,7 @@ elif predict_btn:
 st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown(
     "<div style='color:#475569;font-size:0.78em;text-align:center'>"
-    "Powered by <a href='https://huggingface.co/Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large' "
+    "Finetuned model : <a href='https://huggingface.co/Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large' "
     "style='color:#475569'>scancode-required-phrases-deberta-large</a><br>"
     "GitHub: <a href='https://github.com/Kaushik-Kumar-CEG' style='color:#475569'>Kaushik-Kumar-CEG</a>"
     "</div>",
