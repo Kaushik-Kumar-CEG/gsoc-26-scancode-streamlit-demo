@@ -111,7 +111,7 @@ st.markdown(
 )
 st.caption(
     "Predicts the required phrase boundary in a `.RULE` file to prevent false positive license detections. "
-    "DeBERTa-v3-large · F1 0.7931"
+    "Made with a custom finetuned DeBERTa-v3-large model"
 )
 
 st.markdown("<br>", unsafe_allow_html=True)
