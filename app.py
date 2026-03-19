@@ -58,8 +58,7 @@ EXAMPLES = {
 }
 
 TIER_COLOR = {"auto": "#22c55e", "review": "#f59e0b", "reject": "#ef4444"}
-TIER_LABEL = {"auto": "High confidence", "review": "Moderate confidence", "reject": "Low confidence"}
-
+TIER_LABEL = {"auto": "Auto-Approvable", "review": "Requires Manual Review", "reject": "Low Confidence / Skip"}
 def highlight_phrase(rule_text, phrase):
     safe_text   = html.escape(rule_text)
     safe_phrase = html.escape(phrase)
