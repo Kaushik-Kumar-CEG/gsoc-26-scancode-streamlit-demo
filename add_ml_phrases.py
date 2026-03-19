@@ -505,17 +505,17 @@ def process_csv(csv_path, dry_run=False):
         print('next: run scancode-reindex-licenses')
 
 
-def _case_insensitive_replace(text, old, new, count=1):
+def _case_insensitive_replace(text, old, new_template, count=1):
     """Replace `old` in `text` preserving original case, case-insensitive match."""
     pattern = re.compile(re.escape(old), re.IGNORECASE)
     match = pattern.search(text)
     if not match:
         return text
-    found = match.group()
-    return text.replace(found, new.replace(old, found), count)
+    replacement = new_template.format(match.group(0))
+    return pattern.sub(replacement, text, count=count)
 
 
-def process_interactive(model, tokenizer, limit=None):
+def process_interactive(model, tokenizer, limit=None, dry_run=False):
     from rich.console import Console
     from rich.syntax import Syntax
     from rich.panel import Panel
@@ -588,7 +588,7 @@ def process_interactive(model, tokenizer, limit=None):
 
                 # case-insensitive replacement for preview diff
                 injected = _case_insensitive_replace(
-                    original, phrase_text, f'{{{{{phrase_text}}}}}',
+                    original, phrase_text, '{{{{{0}}}}}',
                 )
                 orig_lines = [line + '\n' for line in original.splitlines()]
                 new_lines = [line + '\n' for line in injected.splitlines()]
@@ -652,7 +652,7 @@ def process_interactive(model, tokenizer, limit=None):
 
                 if choice in ('y', 'e'):
                     updated = add_required_phrase_to_rule(
-                        rule, phrase_text, source='ml_model', dry_run=False,
+                        rule, phrase_text, source='ml_model', dry_run=dry_run,
                     )
                     if updated:
                         label = 'auto' if tier == 'auto' else 'manual'
@@ -710,7 +710,7 @@ def main():
     model, tokenizer = load_model(MODEL_ID)
 
     if args.interactive:
-        process_interactive(model, tokenizer, limit=args.limit)
+        process_interactive(model, tokenizer, limit=args.limit, dry_run=args.dry_run)
     elif args.rule:
         process_single(args.rule, model, tokenizer, dry_run=args.dry_run)
     else:
