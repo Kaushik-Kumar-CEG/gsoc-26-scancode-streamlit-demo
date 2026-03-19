@@ -30,6 +30,7 @@ import warnings
 import numpy as np
 from pathlib import Path
 
+# --- STREAMLIT CLOUD COMPATIBILITY BLOCK ---
 try:
     repo_root = Path(__file__).resolve().parent.parent.parent
     if (repo_root / 'src').exists():
@@ -42,9 +43,21 @@ try:
     )
 except ImportError:
     # Graceful fallback for the isolated Streamlit UI demo.
+    # Mocks the internal Scancode functions so the ML engine still runs on the web.
     Rule = None
-    add_required_phrase_to_rule = None
-    RequiredPhraseRuleCandidate = None
+    
+    def add_required_phrase_to_rule(*args, **kwargs):
+        return True
+        
+    class MockCandidate:
+        def is_good(self, *args, **kwargs):
+            return True
+            
+    class RequiredPhraseRuleCandidate:
+        @staticmethod
+        def create(**kwargs):
+            return MockCandidate()
+# -------------------------------------------
 
 MODEL_ID = 'Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large'
 
@@ -199,11 +212,12 @@ def extract_phrases(token_data, full_text):
     # deduplicate — keep highest confidence when same phrase predicted twice
     seen = {}
     for text, conf, idx in phrases:
-        # Streamlit parity with Scancode is_good(): drop single words under 5 chars (e.g., 'app', 'Barr')
         words = text.split()
-        if len(words) == 1 and len(text) < 5:
+        # Drop single words under 5 chars UNLESS they are uppercase acronyms (e.g. MIT, GPL, ZPL)
+        is_acronym = len(words) == 1 and bool(re.match(r'^[A-Z0-9][A-Z0-9\-\.]+$', text))
+        if len(words) == 1 and len(text) < 5 and not is_acronym:
             continue
-            
+
         if text not in seen or conf > seen[text][1]:
             seen[text] = (text, conf, idx)
     unique_phrases = list(seen.values())
@@ -282,7 +296,7 @@ def get_rule_type(rule):
 
 
 def process_rule(rule, model, tokenizer, dry_run=False, verbose=False):
-    if '{{' in (rule.text or '') or rule.is_required_phrase:
+    if '{{' in (rule.text or '') or getattr(rule, 'is_required_phrase', False):
         return None
 
     clean_text = (rule.text or '').replace('\r\n', '\n')
@@ -299,14 +313,16 @@ def process_rule(rule, model, tokenizer, dry_run=False, verbose=False):
     token_data, clean_text_out = run_inference(model, tokenizer, rule_type, clean_text)
     phrases = extract_phrases(token_data, clean_text_out)
     if not phrases:
+        if verbose:
+            print('  Rule contains no recognizable license identifiers.')
         return None
 
     # reverse sort by char position so earlier offsets aren't shifted by injection
     phrases.sort(key=lambda x: x[2], reverse=True)
 
     result = {
-        'rule_identifier': rule.identifier,
-        'license_expression': rule.license_expression,
+        'rule_identifier': getattr(rule, 'identifier', 'UI_Demo_Rule'),
+        'license_expression': getattr(rule, 'license_expression', 'N/A'),
         'phrases': [],
     }
 
@@ -314,7 +330,7 @@ def process_rule(rule, model, tokenizer, dry_run=False, verbose=False):
         tier = 'auto' if conf >= HIGH_CONF else ('review' if conf >= LOW_CONF else 'reject')
 
         candidate = RequiredPhraseRuleCandidate.create(
-            license_expression=rule.license_expression,
+            license_expression=getattr(rule, 'license_expression', 'N/A'),
             text=phrase_text,
         )
         if not candidate.is_good(rule, min_tokens=2, min_single_token_len=5):
