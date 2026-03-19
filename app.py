@@ -21,20 +21,19 @@ st.set_page_config(
 
 # ── model pre-warm on boot ───────────────────────────────────────────────────
 # loads ONNX model during Space boot so first click is instant
-@st.cache_resource(show_spinner="Loading model...")
+# ── model pre-warm on boot ───────────────────────────────────────────────────
+@st.cache_resource(show_spinner="Loading model weights...")
 def get_cached_model():
-    for _p in [
-        Path(__file__).resolve().parent.parent / "etc" / "scripts",
-        Path(__file__).resolve().parent / "etc" / "scripts",
-        Path.cwd() / "etc" / "scripts",
-        Path.cwd().parent / "etc" / "scripts",
-    ]:
-        if (_p / "add_ml_phrases.py").exists():
-            sys.path.insert(0, str(_p))
-            break
-    from add_ml_phrases import load_model, MODEL_ID
-    return load_model(MODEL_ID)
-
+    from transformers import AutoTokenizer, AutoModelForTokenClassification
+    
+    # For the web demo, we use standard PyTorch instead of ONNX.
+    # This bypasses the memory-heavy ONNX export step so it fits in Streamlit's 1GB RAM limit!
+    MODEL_ID = "Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large"
+    
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+    model = AutoModelForTokenClassification.from_pretrained(MODEL_ID)
+    
+    return model, tokenizer
 #_ = get_cached_model()  # force execution on boot — not lazy
 
 
