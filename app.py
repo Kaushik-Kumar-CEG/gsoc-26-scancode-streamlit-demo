@@ -35,7 +35,7 @@ def get_cached_model():
     from add_ml_phrases import load_model, MODEL_ID
     return load_model(MODEL_ID)
 
-_ = get_cached_model()  # force execution on boot — not lazy
+#_ = get_cached_model()  # force execution on boot — not lazy
 
 
 # ── example rules for quick testing ──────────────────────────────────────────
