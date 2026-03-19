@@ -1,0 +1,9 @@
+# Requirements for Streamlit Cloud Demo
+streamlit>=1.30.0
+torch>=2.0.0
+optimum[onnxruntime]>=1.16.0
+huggingface-hub>=0.20.0
+transformers>=4.40.0
+onnxruntime>=1.17.0
+numpy>=1.24.0
+rich>=13.0.0
