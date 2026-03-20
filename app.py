@@ -176,9 +176,7 @@ if predict_btn and rule_text.strip():
             token_data, clean_text, original_text, offset_map = run_inference(
                 model, tokenizer, rule_type, rule_text
             )
-            st.code(repr(clean_text[:300]))
             phrases_raw = extract_phrases(token_data, clean_text, original_text, offset_map)
-            st.code(repr(phrases_raw))
 
 
             seen = {}
