@@ -25,13 +25,13 @@ def get_cached_model():
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     model = AutoModelForTokenClassification.from_pretrained(
         MODEL_ID,
-        torch_dtype=torch.float16   # ✅ FP16 (same as original)
+        torch_dtype=torch.float16   # ✅ SAME as original (important)
     )
     
     return model, tokenizer
 
 
-# ── updated examples (safe change) ────────────────────────────────────────────
+# ── UPDATED EXAMPLES ONLY (safe change) ───────────────────────────────────────
 EXAMPLES = {
     "LGPL-2 + GPL-2 (multi)": (
         "is_license_notice",
@@ -107,9 +107,10 @@ def make_diff(original, phrase):
     return "<br>".join(lines)
 
 
-# ── UI (UNCHANGED from original except text polish) ───────────────────────────
+# ── HEADER (UNCHANGED FROM ORIGINAL) ─────────────────────────────────────────
 st.title("Scancode Required Phrase Extractor")
 
+# ── INPUT (UNCHANGED) ─────────────────────────────────────────────────────────
 rule_type = st.session_state.get("rule_type", "is_license_notice")
 
 rule_text = st.text_area(
@@ -120,7 +121,8 @@ rule_text = st.text_area(
 
 predict_btn = st.button("Predict Required Phrase")
 
-# ── inference (UNCHANGED) ─────────────────────────────────────────────────────
+
+# ── INFERENCE (UNCHANGED) ─────────────────────────────────────────────────────
 if predict_btn and rule_text.strip():
     with st.spinner("Running inference..."):
         try:
