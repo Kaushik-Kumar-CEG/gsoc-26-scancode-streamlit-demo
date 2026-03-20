@@ -165,6 +165,7 @@ if predict_btn and rule_text.strip():
     with st.spinner("Running inference..."):
         try:
             from add_ml_phrases import run_inference, extract_phrases
+            import add_ml_phrases
             model, tokenizer = get_cached_model()
             import re
             
