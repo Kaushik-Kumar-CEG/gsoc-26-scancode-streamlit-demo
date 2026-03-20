@@ -173,8 +173,10 @@ if predict_btn and rule_text.strip():
                 st.info('URL-only rules are skipped — model cannot extract phrases from bare URLs.')
                 st.stop()
                 
-            token_data, clean_text = run_inference(model, tokenizer, rule_type, rule_text)
-            phrases_raw = extract_phrases(token_data, clean_text)
+            token_data, clean_text, original_text, offset_map = run_inference(
+                model, tokenizer, rule_type, rule_text
+            )
+            phrases_raw = extract_phrases(token_data, clean_text, original_text, offset_map)
 
             seen = {}
             for text, conf, idx in phrases_raw:
