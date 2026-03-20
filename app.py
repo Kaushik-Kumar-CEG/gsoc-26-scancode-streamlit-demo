@@ -37,18 +37,39 @@ def get_cached_model():
 
 # ── example rules for quick testing ──────────────────────────────────────────
 EXAMPLES = {
-    "BSD-3": (
+    # multi-phrase dual-license — best showcase of BIO multi-span
+    "LGPL-2 + GPL-2 (multi)": (
+        "is_license_notice",
+        "This library is free software; you can redistribute it and/or\n"
+        "modify it under the terms of the GNU Library General Public\n"
+        "License as published by the Free Software Foundation; either\n"
+        "version 2 of the License, or (at your option) any later version.\n\n"
+        "On Debian systems, the complete text of the GNU Library General Public\n"
+        "License can be found in /usr/share/common-licenses/LGPL-2 file.\n\n"
+        "However, many parts of this library are licensed differently:\n\n"
+        "This program is free software; you can redistribute it and/or\n"
+        "modify it under the terms of the GNU General Public License as\n"
+        "published by the Free Software Foundation; either version 2 of the\n"
+        "License, or (at your option) any later version.\n\n"
+        "On Debian systems, the complete text of the GNU General Public\n"
+        "License can be found in /usr/share/common-licenses/GPL-2 file."
+    ),
+    # short SPDX tag — high confidence, clean
+    "OLDAP-2.5": (
         "is_license_reference",
-        "licensed under the terms of the BSD-3-Clause license"
+        "OLDAP-2.5 https://spdx.org/licenses/OLDAP-2.5"
     ),
-    "Apache-2.0": (
+    # SPDX identifier line — high confidence
+    "LGPL-2.0-or-later tag": (
+        "is_license_tag",
+        "SPDXLicenseIdentifier: LGPL-2.0-or-later"
+    ),
+    # review tier — honest about moderate confidence
+    "LGPL source notice": (
         "is_license_notice",
-        "code is licensed under the Apache-2.0 license."
+        "All source code is licensed under the GNU Lesser General Public License"
     ),
-    "GPL-3 (multi)": (
-        "is_license_notice",
-        "License: GPL-3  This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 3 as published by the Free Software Foundation."
-    ),
+    # low confidence — transparent about limits
     "Ambiguous": (
         "is_license_notice",
         "derived from ICU (http://www.icu-project.org)\n"
