@@ -1,10 +1,5 @@
-# review_ui/app.py
-#
-# Streamlit demo for scancode required phrase prediction.
-# Deployed on HuggingFace Spaces as a live demo link for the proposal.
-#
-# Run locally: streamlit run app.py
-# (from scancode-toolkit root so add_ml_phrases.py is importable)
+# review_ui/app.py — TEMPORARY CODEBERT TEST VERSION
+# Revert to original app.py after testing
 import traceback
 import re
 import sys
@@ -19,23 +14,18 @@ st.set_page_config(
     layout="centered",
 )
 
-# ── model pre-warm on boot ───────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Loading model weights...")
 def get_cached_model():
     from transformers import AutoTokenizer, AutoModelForTokenClassification
     import torch
-    
-    MODEL_ID = "Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large"
-    
+
+    MODEL_ID = "Kaushik-Kumar-CEG/scancode-required-phrases-codebert-dapt"
+
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    model = AutoModelForTokenClassification.from_pretrained(
-        MODEL_ID,
-        torch_dtype=torch.float16
-    )
-    
+    model = AutoModelForTokenClassification.from_pretrained(MODEL_ID)  # no float16 — CodeBERT is small
+
     return model, tokenizer
 
-# ── example rules for quick testing ──────────────────────────────────────────
 EXAMPLES = {
     "BSD-3": (
         "is_license_reference",
@@ -59,11 +49,11 @@ EXAMPLES = {
 
 TIER_COLOR = {"auto": "#22c55e", "review": "#f59e0b", "reject": "#ef4444"}
 TIER_LABEL = {"auto": "Auto-Approvable", "review": "Requires Manual Review", "reject": "Low Confidence / Skip"}
+
 def highlight_phrase(rule_text, phrase):
     safe_text   = html.escape(rule_text)
     safe_phrase = html.escape(phrase)
     escaped     = re.escape(safe_phrase).replace(r"\ ", r"\s+")
-    
     highlighted = re.sub(
         f"({escaped})",
         r'<mark style="background:#fef3c7;padding:1px 4px;border-radius:3px;color:#92400e;font-weight:bold">\1</mark>',
@@ -91,7 +81,6 @@ def make_diff(original, phrase):
             lines.append(f'<span style="color:#94a3b8">{esc}</span>')
     return "<br>".join(lines)
 
-# ── header ────────────────────────────────────────────────────────────────────
 st.markdown(
     "<div style='margin-bottom:2px'>"
     "<span style='font-size:0.8em;color:#64748b;letter-spacing:0.06em'>"
@@ -110,12 +99,11 @@ st.markdown(
 )
 st.caption(
     "predicts the required phrase boundary in a `.RULE` file to prevent false positive license detections. "
-    "made with a finetuned DeBERTa-v3-large model"
+    "⚠️ TESTING: CodeBERT model — revert to DeBERTa for production"
 )
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ── example loader ────────────────────────────────────────────────────────────
 st.markdown("**Try an example:**")
 cols = st.columns(len(EXAMPLES))
 for col, (label, (rtype, rtext)) in zip(cols, EXAMPLES.items()):
@@ -125,7 +113,6 @@ for col, (label, (rtype, rtext)) in zip(cols, EXAMPLES.items()):
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ── input ─────────────────────────────────────────────────────────────────────
 rule_type = st.session_state.get("rule_type", "is_license_notice")
 
 rule_text = st.text_area(
@@ -140,18 +127,16 @@ st.caption("Note: Paste only the plain text body. Exclude YAML frontmatter and t
 
 predict_btn = st.button("Predict Required Phrase", type="primary", use_container_width=True)
 
-# ── inference ─────────────────────────────────────────────────────────────────
 if predict_btn and rule_text.strip():
     with st.spinner("Running inference..."):
         try:
             from add_ml_phrases import run_inference, extract_phrases
             model, tokenizer = get_cached_model()
-            import re
-            
+
             if re.fullmatch(r'https?://\S+', rule_text.strip()):
                 st.info('URL-only rules are skipped — model cannot extract phrases from bare URLs.')
                 st.stop()
-                
+
             token_data, clean_text = run_inference(model, tokenizer, rule_type, rule_text)
             phrases_raw = extract_phrases(token_data, clean_text)
 
@@ -169,9 +154,9 @@ if predict_btn and rule_text.strip():
                 st.markdown(f"**{len(phrases)} candidate phrase(s) found:**")
 
                 for phrase_text, conf, _ in phrases:
-                    tier   = "auto" if conf >= 0.95 else ("review" if conf >= 0.60 else "reject")
-                    color  = TIER_COLOR[tier]
-                    label  = TIER_LABEL[tier]
+                    tier  = "auto" if conf >= 0.95 else ("review" if conf >= 0.60 else "reject")
+                    color = TIER_COLOR[tier]
+                    label = TIER_LABEL[tier]
 
                     st.markdown(
                         f'<div style="border-left:3px solid {color};padding:8px 14px;'
@@ -193,7 +178,7 @@ if predict_btn and rule_text.strip():
                     f'{highlight_phrase(rule_text, best)}</div>',
                     unsafe_allow_html=True,
                 )
-                
+
                 st.markdown("<br>**Diff:**", unsafe_allow_html=True)
                 st.markdown(
                     f'<div style="font-family:monospace;white-space:pre-wrap;font-size:0.85em;'
@@ -210,12 +195,11 @@ if predict_btn and rule_text.strip():
 elif predict_btn:
     st.warning("Please enter some rule text first.")
 
-# ── footer ────────────────────────────────────────────────────────────────────
 st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown(
     "<div style='color:#475569;font-size:0.78em;text-align:center'>"
-    "Finetuned model : <a href='https://huggingface.co/Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large' "
-    "style='color:#475569'>scancode-required-phrases-deberta-large</a><br>"
+    "Model: <a href='https://huggingface.co/Kaushik-Kumar-CEG/scancode-required-phrases-codebert-dapt' "
+    "style='color:#475569'>scancode-required-phrases-codebert-dapt</a><br>"
     "GitHub: <a href='https://github.com/Kaushik-Kumar-CEG' style='color:#475569'>Kaushik-Kumar-CEG</a>"
     "</div>",
     unsafe_allow_html=True,
