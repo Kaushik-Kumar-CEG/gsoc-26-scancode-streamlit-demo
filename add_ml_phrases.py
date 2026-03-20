@@ -239,6 +239,7 @@ def run_inference(model, tokenizer, rule_type, clean_text):
     # FIX 4+5: preprocess before inference
     original_text = clean_text
     preprocessed_text, offset_map = preprocess_text(clean_text)
+    print("PREPROCESSED:", repr(preprocessed_text[:300]))
 
     prefix = rule_type + ' '
     full_text = prefix + preprocessed_text
