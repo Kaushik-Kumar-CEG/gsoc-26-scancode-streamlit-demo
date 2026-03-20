@@ -1,11 +1,6 @@
 # review_ui/app.py
-#
-# Streamlit demo for scancode required phrase prediction.
-# Deployed on HuggingFace Spaces as a live demo link for the proposal.
-#
-# Run locally: streamlit run app.py
-# (from scancode-toolkit root so add_ml_phrases.py is importable)
 
+import traceback
 import re
 import sys
 import html
@@ -20,7 +15,6 @@ st.set_page_config(
 )
 
 # ── model pre-warm on boot ───────────────────────────────────────────────────
-# loads ONNX model during Space boot so first click is instant
 @st.cache_resource(show_spinner="Loading model...")
 def get_cached_model():
     for _p in [
@@ -32,15 +26,16 @@ def get_cached_model():
         if (_p / "add_ml_phrases.py").exists():
             sys.path.insert(0, str(_p))
             break
+
     from add_ml_phrases import load_model, MODEL_ID
-    return load_model(MODEL_ID)
+    model, tokenizer = load_model(MODEL_ID)   # ✅ FIXED
+    return model, tokenizer
 
-_ = get_cached_model()  # force execution on boot — not lazy
+_ = get_cached_model()  # force execution on boot
 
 
-# ── example rules for quick testing ──────────────────────────────────────────
+# ── example rules ─────────────────────────────────────────────────────────────
 EXAMPLES = {
-    # multi-phrase dual-license — best showcase of BIO multi-span
     "LGPL-2 + GPL-2 (multi)": (
         "is_license_notice",
         "This library is free software; you can redistribute it and/or\n"
@@ -57,22 +52,18 @@ EXAMPLES = {
         "On Debian systems, the complete text of the GNU General Public\n"
         "License can be found in /usr/share/common-licenses/GPL-2 file."
     ),
-    # short SPDX tag — high confidence, clean
     "OLDAP-2.5": (
         "is_license_reference",
         "OLDAP-2.5 https://spdx.org/licenses/OLDAP-2.5"
     ),
-    # SPDX identifier line — high confidence
     "LGPL-2.0-or-later tag": (
         "is_license_tag",
         "SPDXLicenseIdentifier: LGPL-2.0-or-later"
     ),
-    # review tier — honest about moderate confidence
     "LGPL source notice": (
         "is_license_notice",
         "All source code is licensed under the GNU Lesser General Public License"
     ),
-    # low confidence — transparent about limits
     "Ambiguous": (
         "is_license_notice",
         "derived from ICU (http://www.icu-project.org)\n"
@@ -112,7 +103,7 @@ def make_diff(original, phrase):
             lines.append(f'<span style="color:#ef4444">{esc}</span>')
         else:
             lines.append(f'<span style="color:#94a3b8">{esc}</span>')
-    return "\n".join(lines)
+    return "<br>".join(lines)   # ✅ FIXED
 
 
 # ── header ────────────────────────────────────────────────────────────────────
@@ -147,8 +138,6 @@ for col, (label, (rtype, rtext)) in zip(cols, EXAMPLES.items()):
         st.session_state["rule_type"] = rtype
         st.session_state["rule_text"] = rtext
 
-st.markdown("")
-
 # ── input ─────────────────────────────────────────────────────────────────────
 rule_type = st.session_state.get("rule_type", "is_license_notice")
 
@@ -161,8 +150,7 @@ rule_text = st.text_area(
 )
 
 st.caption(
-    "💡 `.RULE` file format: YAML frontmatter (license_expression, is_license_notice: yes, etc.) "
-    "followed by `---` then the plain rule text. Paste only the text part here."
+    "💡 `.RULE` file format: YAML frontmatter followed by `---` then the plain rule text."
 )
 
 predict_btn = st.button("Predict Required Phrase", type="primary", use_container_width=True)
@@ -173,20 +161,21 @@ if predict_btn and rule_text.strip():
         try:
             from add_ml_phrases import run_inference, extract_phrases
             model, tokenizer = get_cached_model()
-            import re
+
             if re.fullmatch(r'https?://\S+', rule_text.strip()):
                 st.info('URL-only rules are skipped — the model cannot extract a required phrase from a bare URL.')
                 st.stop()
+
             token_data, clean_text = run_inference(model, tokenizer, rule_type, rule_text)
             phrases_raw = extract_phrases(token_data, clean_text)
 
-            # deduplicate - keep highest confidence if same phrase appears twice
             seen = {}
             for text, conf, idx in phrases_raw:
                 if text not in seen or conf > seen[text][1]:
                     seen[text] = (text, conf, idx)
+
             phrases = list(seen.values())
-            phrases.sort(key=lambda x: x[2], reverse=True)
+            phrases.sort(key=lambda x: x[1], reverse=True)   # ✅ FIXED
 
             if not phrases:
                 st.warning("No required phrases predicted for this rule.")
@@ -208,6 +197,7 @@ if predict_btn and rule_text.strip():
                         f'</div>',
                         unsafe_allow_html=True,
                     )
+
                     st.markdown(
                         f'<style>.stProgress > div > div > div > div {{background-color: {color};}}</style>',
                         unsafe_allow_html=True,
@@ -225,15 +215,18 @@ if predict_btn and rule_text.strip():
                     unsafe_allow_html=True,
                 )
 
-
+                st.markdown("**Diff:**")
+                st.markdown(
+                    f'<div style="font-family:monospace;white-space:pre-wrap;font-size:0.85em;'
+                    f'background:#000000;color:#e2e8f0;padding:14px;border-radius:6px;'
+                    f'border:1px solid #334155;line-height:1.6">'
+                    f'{make_diff(rule_text, best)}</div>',
+                    unsafe_allow_html=True,
+                )
 
         except Exception as e:
             st.error(f"Error: {e}")
-            st.info(
-                "If running locally, make sure `add_ml_phrases.py` is in `etc/scripts/` "
-                "and the ONNX model is cached. Run:  \n"
-                "`python etc/scripts/add_ml_phrases.py --all --limit 1 --dry-run`"
-            )
+            st.code(traceback.format_exc(), language="python")
 
 elif predict_btn:
     st.warning("Please enter some rule text first.")
