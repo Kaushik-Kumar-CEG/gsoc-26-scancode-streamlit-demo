@@ -1,4 +1,10 @@
 # review_ui/app.py
+#
+# Streamlit demo for scancode required phrase prediction.
+# Deployed on HuggingFace Spaces as a live demo link for the proposal.
+#
+# Run locally: streamlit run app.py
+# (from scancode-toolkit root so add_ml_phrases.py is importable)
 import traceback
 import re
 import sys
@@ -24,36 +30,24 @@ def get_cached_model():
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     model = AutoModelForTokenClassification.from_pretrained(
         MODEL_ID,
-        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+        torch_dtype=torch.float16
     )
     
     return model, tokenizer
 
-# ── example rules (Updated with Version 2 examples) ──────────────────────────
+# ── example rules for quick testing ──────────────────────────────────────────
 EXAMPLES = {
-    "LGPL-2 + GPL-2 (multi)": (
-        "is_license_notice",
-        "This library is free software; you can redistribute it and/or\n"
-        "modify it under the terms of the GNU Library General Public\n"
-        "License as published by the Free Software Foundation; either\n"
-        "version 2 of the License, or (at your option) any later version.\n\n"
-        "On Debian systems, the complete text of the GNU Library General Public\n"
-        "License can be found in /usr/share/common-licenses/LGPL-2 file.\n\n"
-        "However, many parts of this library are licensed differently:\n\n"
-        "This program is free software; you can redistribute it and/or\n"
-        "modify it under the terms of the GNU General Public License as\n"
-        "published by the Free Software Foundation; either version 2 of the\n"
-        "License, or (at your option) any later version.\n\n"
-        "On Debian systems, the complete text of the GNU General Public\n"
-        "License can be found in /usr/share/common-licenses/GPL-2 file."
-    ),
-    "OLDAP-2.5": (
+    "BSD-3": (
         "is_license_reference",
-        "OLDAP-2.5 https://spdx.org/licenses/OLDAP-2.5"
+        "licensed under the terms of the BSD-3-Clause license"
     ),
-    "LGPL-2.0-or-later tag": (
-        "is_license_tag",
-        "SPDXLicenseIdentifier: LGPL-2.0-or-later"
+    "Apache-2.0": (
+        "is_license_notice",
+        "code is licensed under the Apache-2.0 license."
+    ),
+    "GPL-3 (multi)": (
+        "is_license_notice",
+        "License: GPL-3  This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 3 as published by the Free Software Foundation."
     ),
     "Ambiguous": (
         "is_license_notice",
@@ -64,8 +58,7 @@ EXAMPLES = {
 }
 
 TIER_COLOR = {"auto": "#22c55e", "review": "#f59e0b", "reject": "#ef4444"}
-TIER_LABEL = {"auto": "High confidence", "review": "Moderate confidence", "reject": "Low confidence"}
-
+TIER_LABEL = {"auto": "Auto-Approvable", "review": "Requires Manual Review", "reject": "Low Confidence / Skip"}
 def highlight_phrase(rule_text, phrase):
     safe_text   = html.escape(rule_text)
     safe_phrase = html.escape(phrase)
@@ -106,7 +99,7 @@ st.markdown(
     "</span></div>",
     unsafe_allow_html=True,
 )
-st.title("License Required Phrase Detector")
+st.title("Scancode Required Phrase Extractor")
 st.markdown(
     "<div style='margin-top:-10px;margin-bottom:16px'>"
     "<span style='font-size:0.95em;color:#94a3b8'>by "
@@ -116,10 +109,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.caption(
-    "Predicts which phrase in a `.RULE` file should be marked as a required phrase — "
-    "preventing false positive license detections. DeBERTa-v3-large · F1 0.7931."
+    "predicts the required phrase boundary in a `.RULE` file to prevent false positive license detections. "
+    "made with a finetuned DeBERTa-v3-large model"
 )
-st.divider()
+
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ── example loader ────────────────────────────────────────────────────────────
 st.markdown("**Try an example:**")
@@ -138,11 +132,11 @@ rule_text = st.text_area(
     "Rule text",
     height=160,
     key="rule_text",
-    placeholder="Paste the body of a .RULE file here...",
-    help="Do not include YAML frontmatter — just the license text body."
+    placeholder="Paste rule text here...",
+    label_visibility="collapsed"
 )
 
-st.caption("💡 Paste only the text part here (the text below the `---` separator).")
+st.caption("Note: Paste only the plain text body. Exclude YAML frontmatter and the `---` separator.")
 
 predict_btn = st.button("Predict Required Phrase", type="primary", use_container_width=True)
 
@@ -152,6 +146,7 @@ if predict_btn and rule_text.strip():
         try:
             from add_ml_phrases import run_inference, extract_phrases
             model, tokenizer = get_cached_model()
+            import re
             
             if re.fullmatch(r'https?://\S+', rule_text.strip()):
                 st.info('URL-only rules are skipped — model cannot extract phrases from bare URLs.')
@@ -165,13 +160,12 @@ if predict_btn and rule_text.strip():
                 if text not in seen or conf > seen[text][1]:
                     seen[text] = (text, conf, idx)
             phrases = list(seen.values())
-            # Sort by confidence as in Original
             phrases.sort(key=lambda x: x[1], reverse=True)
 
             if not phrases:
                 st.warning("No recognizable license identifiers found in this rule.")
             else:
-                st.divider()
+                st.markdown("<br>", unsafe_allow_html=True)
                 st.markdown(f"**{len(phrases)} candidate phrase(s) found:**")
 
                 for phrase_text, conf, _ in phrases:
@@ -184,12 +178,10 @@ if predict_btn and rule_text.strip():
                         f'margin:8px 0;border-radius:0 6px 6px 0;background:#0f172a">'
                         f'<code style="font-size:1.05em;color:#e2e8f0">{html.escape(phrase_text)}</code>'
                         f'<br><span style="color:{color};font-size:0.85em;font-weight:600">'
-                        f'{conf:.0%} · {label}</span>'
+                        f'{conf:.1%} · {label}</span>'
                         f'</div>',
                         unsafe_allow_html=True,
                     )
-                    # Optional: Progress bar from version 2
-                    st.progress(float(conf))
 
                 best = phrases[0][0]
 
@@ -219,7 +211,7 @@ elif predict_btn:
     st.warning("Please enter some rule text first.")
 
 # ── footer ────────────────────────────────────────────────────────────────────
-st.divider()
+st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown(
     "<div style='color:#475569;font-size:0.78em;text-align:center'>"
     "Finetuned model : <a href='https://huggingface.co/Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large' "
