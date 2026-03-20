@@ -176,7 +176,17 @@ if predict_btn and rule_text.strip():
             token_data, clean_text, original_text, offset_map = run_inference(
                 model, tokenizer, rule_type, rule_text
             )
+            import add_ml_phrases as _am
+            _orig = _am.clean_phrase
+            calls = []
+            def _patched(p):
+                r = _orig(p)
+                calls.append((p, r))
+                return r
+            _am.clean_phrase = _patched
             phrases_raw = extract_phrases(token_data, clean_text, original_text, offset_map)
+            _am.clean_phrase = _orig
+            st.code(repr(calls))
             import inspect  # ADD
             st.code(inspect.getsource(add_ml_phrases.extract_phrases))  # ADD
 
