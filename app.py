@@ -176,6 +176,7 @@ if predict_btn and rule_text.strip():
                 model, tokenizer, rule_type, rule_text
             )
             phrases_raw = extract_phrases(token_data, clean_text, original_text, offset_map)
+            st.code(add_ml_phrases.clean_phrase.__code__.co_consts)
 
 
             seen = {}
