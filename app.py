@@ -10,6 +10,7 @@ import re
 import sys
 import html
 from pathlib import Path
+
 import streamlit as st
 
 st.set_page_config(
@@ -176,7 +177,6 @@ if predict_btn and rule_text.strip():
                 model, tokenizer, rule_type, rule_text
             )
             phrases_raw = extract_phrases(token_data, clean_text, original_text, offset_map)
-
 
             seen = {}
             for text, conf, idx in phrases_raw:
