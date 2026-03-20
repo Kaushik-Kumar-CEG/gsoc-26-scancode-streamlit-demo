@@ -346,12 +346,6 @@ def extract_phrases(token_data, full_text, original_text=None, offset_map=None):
         if len(words) == 1 and len(text) < 5 and not is_acronym:
             continue
 
-        # FIX 3: length penalty — short non-SPDX phrases get confidence penalised
-        # Required phrases are rarely < 4 words unless pure SPDX identifiers
-        is_spdx = len(words) == 1 and bool(re.match(r'^[A-Z0-9][A-Za-z0-9\.\-\+]+$', text))
-        if len(words) < 4 and not is_spdx:
-            conf = max(conf - 0.15, 0.0)
-
         if text not in seen or conf > seen[text][1]:
             seen[text] = (text, conf, idx)
     unique_phrases = list(seen.values())
@@ -399,24 +393,20 @@ def clean_phrase(phrase):
     """Normalise a raw phrase span: strip junk, stopwords, balance parens."""
     phrase = PUNCT_STRIP_RE.sub('', phrase).strip()
 
-    # FIX 2+6: unified leading/trailing trim — single loop runs until a heavy token
-    # is found at the boundary. Covers stopwords, legal boundary words, conjunctions,
-    # and grammatical connectors in one pass so stripping one word cannot expose
-    # another junk word that gets missed by a staggered loop.
-    LEADING_JUNK = STOPWORDS | LEFT_BOUNDARY_STOPWORDS | {
-        'or', 'and', 'but', 'with', 'as', 'either', 'at', 'any', 'by',
-        'your', 'option', 'its', 'their', 'our', 'this', 'that', 'which',
-    }
-    TRAILING_JUNK = STOPWORDS | {'later', 'version', 'option', 'your', 'its', 'their', 'only'}
-
+    # strip leading/trailing stopwords
     words = phrase.split()
-    while words and words[0].lower().rstrip(',:;') in LEADING_JUNK:
+    while words and words[0].lower().rstrip(',:;') in STOPWORDS:
         words = words[1:]
-    while words and words[-1].lower().lstrip(',:;') in TRAILING_JUNK:
+    while words and words[-1].lower().lstrip(',:;') in STOPWORDS:
         words = words[:-1]
     phrase = ' '.join(words)
-    if not phrase:
-        return ''
+
+    # FIX 2: strip leading legal boundary words that are never the start of a
+    # required phrase (e.g. "LICENSE LGPL-2.0-or-later" -> "LGPL-2.0-or-later")
+    words = phrase.split()
+    while words and words[0].lower().rstrip(',:;') in LEFT_BOUNDARY_STOPWORDS:
+        words = words[1:]
+    phrase = ' '.join(words)
 
     # strip XML remnants like </name or </comments
     phrase = re.sub(r'</[a-zA-Z]+$', '', phrase)
@@ -425,18 +415,24 @@ def clean_phrase(phrase):
     # the start of a Markdown link: `License](http...`
     # an unbalanced opening bracket usually means we captured garbage before the license
     while phrase.count(')') > phrase.count('('):
-        phrase = phrase[:phrase.rfind(')')]
+        idx = phrase.rfind(')')
+        phrase = phrase[:idx]
     while phrase.count(']') > phrase.count('['):
-        phrase = phrase[:phrase.rfind(']')]
+        idx = phrase.rfind(']')
+        phrase = phrase[:idx]
     while phrase.count('>') > phrase.count('<'):
-        phrase = phrase[:phrase.rfind('>')]
+        idx = phrase.rfind('>')
+        phrase = phrase[:idx]
 
     while phrase.count('(') > phrase.count(')'):
-        phrase = phrase[phrase.find('(') + 1:]
+        idx = phrase.find('(')
+        phrase = phrase[idx + 1:]
     while phrase.count('[') > phrase.count(']'):
-        phrase = phrase[phrase.find('[') + 1:]
+        idx = phrase.find('[')
+        phrase = phrase[idx + 1:]
     while phrase.count('<') > phrase.count('>'):
-        phrase = phrase[phrase.find('<') + 1:]
+        idx = phrase.find('<')
+        phrase = phrase[idx + 1:]
 
     phrase = PUNCT_STRIP_RE.sub('', phrase).strip()
 
