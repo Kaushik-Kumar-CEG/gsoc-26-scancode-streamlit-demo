@@ -411,6 +411,10 @@ def clean_phrase(phrase):
         words = words[1:]
     phrase = ' '.join(words)
 
+    # FIX 6: drop phrases starting with conjunctions — always wrong boundary
+    if re.match(r'^(or|and|but|with|as)\b', phrase, re.IGNORECASE):
+        return ''
+    
     # strip XML remnants like </name or </comments
     phrase = re.sub(r'</[a-zA-Z]+$', '', phrase)
 
