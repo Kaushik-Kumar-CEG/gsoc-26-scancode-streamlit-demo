@@ -309,21 +309,9 @@ def extract_phrases(token_data, full_text, original_text=None, offset_map=None):
             if phrase:
                 # FIX 4+5: remap phrase back to original text coords using exact index
                 if original_text is not None and offset_map is not None:
-                    import difflib
                     idx_in_raw = raw.lower().find(phrase.lower())
                     exact_s = s + (idx_in_raw if idx_in_raw != -1 else 0)
-                    remapped = remap_phrase_to_original(phrase, exact_s, original_text, offset_map)
-                    # Validate remap using sequence similarity — set intersection is
-                    # insufficient as partial shifts can fool word-overlap checks.
-                    clean_norm = ' '.join(phrase.lower().split())
-                    remap_norm = ' '.join(remapped.lower().split())
-                    similarity = difflib.SequenceMatcher(None, clean_norm, remap_norm).ratio()
-                    if similarity > 0.85:
-                        phrase = remapped
-                    # else: remap is bad (offset map misaligned) — keep clean phrase
-                    # but mark as review so injection failure is surfaced, not silently swallowed
-                    else:
-                        conf = min(conf, LOW_CONF - 0.01)  # push to reject tier
+                    phrase = remap_phrase_to_original(phrase, exact_s, original_text, offset_map)
                 phrases.append((phrase, conf, s))
 
     for start, end, label, conf in token_data:
