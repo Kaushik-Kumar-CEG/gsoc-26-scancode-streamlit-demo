@@ -178,6 +178,8 @@ if predict_btn and rule_text.strip():
             )
             st.code(repr(clean_text[:300]))
             phrases_raw = extract_phrases(token_data, clean_text, original_text, offset_map)
+            st.code(repr(phrases_raw))
+
 
             seen = {}
             for text, conf, idx in phrases_raw:
