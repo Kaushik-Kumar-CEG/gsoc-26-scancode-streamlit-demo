@@ -36,9 +36,12 @@ def get_cached_model():
     return model, tokenizer
 
 # ── example rules for quick testing ──────────────────────────────────────────
+# Row 1: auto-tier showcase — multi-span, different families, different formats
+# Row 2: review/low tiers — honest confidence, diverse rule types
 EXAMPLES = {
-    # multi-phrase dual-license — best showcase of BIO multi-span
-    "LGPL-2 + GPL-2 (multi)": (
+    # Row 1 — auto tier
+    # dual-license multi-span — showcases BIO multi-span extraction
+    "LGPL-2 · GPL-2 (dual)": (
         "is_license_notice",
         "This library is free software; you can redistribute it and/or\n"
         "modify it under the terms of the GNU Library General Public\n"
@@ -54,22 +57,48 @@ EXAMPLES = {
         "On Debian systems, the complete text of the GNU General Public\n"
         "License can be found in /usr/share/common-licenses/GPL-2 file."
     ),
-    # short SPDX tag — high confidence, clean
+    # short SPDX reference — different license family, high confidence
     "OLDAP-2.5": (
         "is_license_reference",
         "OLDAP-2.5 https://spdx.org/licenses/OLDAP-2.5"
     ),
-    # SPDX identifier line — high confidence
-    "LGPL-2.0-or-later tag": (
+    # HTML-wrapped rule — showcases HTML stripping pre-processing
+    "LGPL (HTML rule)": (
+        "is_license_notice",
+        "<p>This library is free software; you can redistribute it and/or modify it under the terms of the "
+        "GNU Lesser General Public License as published by the Free Software Foundation; either version 2 of "
+        "the License, or (at your option) any later version.</p>"
+    ),
+    # OCaml comment-style — showcases comment prefix stripping
+    "LGPL (OCaml comment)": (
+        "is_license_notice",
+        "This file is distributed    *)\n"
+        "(*  under the terms of the GNU Library General Public License, with    *)\n"
+        "(*  the special exception on linking described in file ../LICENSE."
+    ),
+    # Row 2 — review/low tiers
+    # triple-license — 3 different families, review tier
+    "GPL · LGPL · MPL (triple)": (
+        "is_license_notice",
+        "Licensed under the terms of any of the following licenses at your choice:\n"
+        " - GNU General Public License Version 2 or later (the \"GPL\")\n"
+        "   http://www.gnu.org/licenses/gpl.html\n"
+        " - GNU Lesser General Public License Version 2.1 or later (the \"LGPL\")\n"
+        "   http://www.gnu.org/licenses/lgpl.html\n"
+        " - Mozilla Public License Version 1.1 or later (the \"MPL\")\n"
+        "   http://www.mozilla.org/MPL/MPL-1.1.html"
+    ),
+    # MIT — different family, review tier
+    "MIT Notice": (
+        "is_license_notice",
+        "This software is released under the MIT License."
+    ),
+    # SPDX tag rule type — different rule type
+    "SPDX Tag": (
         "is_license_tag",
         "SPDXLicenseIdentifier: LGPL-2.0-or-later"
     ),
-    # review tier — honest about moderate confidence
-    "LGPL source notice": (
-        "is_license_notice",
-        "All source code is licensed under the GNU Lesser General Public License"
-    ),
-    # low confidence — transparent about limits
+    # low confidence — transparent about model limits
     "Ambiguous": (
         "is_license_notice",
         "derived from ICU (http://www.icu-project.org)\n"
@@ -138,8 +167,16 @@ st.markdown("<br>", unsafe_allow_html=True)
 
 # ── example loader ────────────────────────────────────────────────────────────
 st.markdown("**Try an example:**")
-cols = st.columns(len(EXAMPLES))
-for col, (label, (rtype, rtext)) in zip(cols, EXAMPLES.items()):
+example_items = list(EXAMPLES.items())
+row1 = example_items[:4]
+row2 = example_items[4:]
+cols1 = st.columns(4)
+for col, (label, (rtype, rtext)) in zip(cols1, row1):
+    if col.button(label, use_container_width=True):
+        st.session_state["rule_type"] = rtype
+        st.session_state["rule_text"] = rtext
+cols2 = st.columns(4)
+for col, (label, (rtype, rtext)) in zip(cols2, row2):
     if col.button(label, use_container_width=True):
         st.session_state["rule_type"] = rtype
         st.session_state["rule_text"] = rtext
