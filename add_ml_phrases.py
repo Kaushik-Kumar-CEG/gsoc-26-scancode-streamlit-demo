@@ -79,7 +79,7 @@ RULE_TYPE_FIELDS = [
 STOPWORDS = {'the', 'a', 'an', 'of', 'in', 'for', 'to', 'and', 'or', 'is', 'are', 'under', 'see'}
 
 # FIX 2: added legal boundary words that should never be the START of a required phrase
-LEFT_BOUNDARY_STOPWORDS = {'license', 'licensed', 'copyright', 'notice', 'file', 'terms'}
+LEFT_BOUNDARY_STOPWORDS = {'license', 'licensed', 'copyright', 'notice', 'file', 'terms', 'released', 'distributed', 'covered', 'governed', 'subject', 'by'}
 
 WORD_BOUNDARIES_L = {' ', '\n', '\t', '/', '(', '[', '<', '`', '"', "'"}
 WORD_BOUNDARIES_R = {' ', '\n', '\t', '.', ',', ')', ']', ';', '>', '`', '"', "'"}
