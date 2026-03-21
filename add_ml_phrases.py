@@ -177,6 +177,10 @@ def remap_phrase_to_original(phrase, exact_s, original_text, offset_map):
     if offset_map is None:
         return phrase
 
+    # bounds check — phrase starting at last char of doc
+    if exact_s >= len(offset_map):
+        return phrase
+
     orig_start = offset_map[exact_s]
     end_idx = min(exact_s + len(phrase) - 1, len(offset_map) - 1)
     orig_end = offset_map[end_idx] + 1
@@ -377,6 +381,9 @@ def clean_phrase(phrase):
 
     if not phrase:
         return ''
+
+    # strip URL filename fragments at phrase start (e.g. 'gpl.html GNU General' -> 'GNU General')
+    phrase = re.sub(r'^\S+\.(?:html?|txt|php|pdf|md)\s+', '', phrase).strip()
 
     # strip XML remnants like </name or </comments
     phrase = re.sub(r'</[a-zA-Z]+$', '', phrase)
@@ -633,8 +640,8 @@ def _case_insensitive_replace(text, old, new_template, count=1):
     match = pattern.search(text)
     if not match:
         return text
-    replacement = new_template.format(match.group(0))
-    return pattern.sub(replacement, text, count=count)
+    matched = match.group(0)
+    return pattern.sub(lambda m: new_template.format(m.group(0)), text, count=count)
 
 
 def process_interactive(model, tokenizer, limit=None, dry_run=False):
