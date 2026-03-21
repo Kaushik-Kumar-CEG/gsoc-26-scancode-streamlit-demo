@@ -105,9 +105,6 @@ def preprocess_text(text):
     original `text` that cleaned_text[i] came from — used to re-anchor phrases
     back to the original text for injection.
     """
-    # --- HTML stripping (Fix 5) ---
-    # Replace tags with a single space so character counts shift predictably.
-    # We build a char-level map: cleaned_pos -> original_pos
     has_html = bool(_HTML_TAG_RE.search(text))
     has_comments = bool(_COMMENT_LINE_RE.search(text))
 
@@ -122,11 +119,9 @@ def preprocess_text(text):
     if has_html:
         pos = 0
         for m in _HTML_TAG_RE.finditer(text):
-            # copy chars before this tag verbatim
             for i in range(pos, m.start()):
                 cleaned_chars.append(text[i])
                 offset_map.append(i)
-            # replace tag with a single space (preserves word boundaries)
             cleaned_chars.append(' ')
             offset_map.append(m.start())
             pos = m.end()
@@ -134,17 +129,12 @@ def preprocess_text(text):
             cleaned_chars.append(text[i])
             offset_map.append(i)
         text = ''.join(cleaned_chars)
-        # rebuild for comment pass
         cleaned_chars = []
-        offset_map_stage2 = []
-        # remap through comment stripping below using the already-mapped text
-        # (simplification: do comment strip on html-cleaned text, compose maps)
         offset_map_intermediate = offset_map
     else:
         offset_map_intermediate = list(range(len(text)))
 
     if has_comments:
-        # strip per-line comment prefixes
         lines = text.split('\n')
         result_chars = []
         result_map = []
@@ -153,10 +143,8 @@ def preprocess_text(text):
             m = _COMMENT_LINE_RE.match(line)
             if m:
                 prefix_len = m.end()
-                # skip the prefix chars
                 for i in range(prefix_len):
                     src_pos += 1
-                # copy rest of line
                 for i in range(prefix_len, len(line)):
                     result_chars.append(line[i])
                     result_map.append(offset_map_intermediate[src_pos])
@@ -166,7 +154,6 @@ def preprocess_text(text):
                     result_chars.append(line[i])
                     result_map.append(offset_map_intermediate[src_pos])
                     src_pos += 1
-            # newline
             if src_pos < len(offset_map_intermediate):
                 result_chars.append('\n')
                 result_map.append(offset_map_intermediate[src_pos])
@@ -190,13 +177,11 @@ def remap_phrase_to_original(phrase, exact_s, original_text, offset_map):
     if offset_map is None:
         return phrase
 
-    # map start/end through offset_map using the exact known index
     orig_start = offset_map[exact_s]
     end_idx = min(exact_s + len(phrase) - 1, len(offset_map) - 1)
     orig_end = offset_map[end_idx] + 1
 
     candidate = original_text[orig_start:orig_end]
-    # normalise whitespace for comparison
     if re.sub(r'\s+', ' ', candidate).strip().lower() == re.sub(r'\s+', ' ', phrase).strip().lower():
         return candidate
     return phrase
@@ -209,7 +194,6 @@ def load_model(model_id):
     except ImportError:
         sys.exit('missing deps — run: pip install -r etc/requirements-ml.txt')
 
-    # suppress torch TracerWarnings from ONNX export (only relevant here)
     try:
         import torch
         warnings.filterwarnings('ignore', category=torch.jit.TracerWarning)
@@ -260,7 +244,6 @@ def run_inference(model, tokenizer, rule_type, clean_text):
 
     results = []
     for i, (start, end) in enumerate(offsets):
-        # skip special tokens (start==end) and tokens inside the prefix
         if start == end or start < prefix_len:
             continue
         adj_start = int(start) - prefix_len
@@ -270,8 +253,6 @@ def run_inference(model, tokenizer, rule_type, clean_text):
             ID2LABEL[preds[i]], float(probs[i][preds[i]]),
         ))
 
-    # return preprocessed_text as the coord space for extract_phrases,
-    # plus original_text and offset_map for remapping
     return results, preprocessed_text, original_text, offset_map
 
 
@@ -293,7 +274,6 @@ def extract_phrases(token_data, full_text, original_text=None, offset_map=None):
         conf = min(cur_confs)
         if conf < 0.50:
             return
-        # snap to word boundaries
         s = span_start
         while s > 0 and full_text[s - 1] not in WORD_BOUNDARIES_L:
             s -= 1
@@ -303,7 +283,6 @@ def extract_phrases(token_data, full_text, original_text=None, offset_map=None):
         raw = re.sub(r'\s+', ' ', full_text[s:e]).strip()
         if cur_confs:
             conf = float(min(cur_confs))
-            # strip XML tag remnants (name>, type>, url>) at span start
             raw = re.sub(r'^\w+>', '', raw).strip()
             phrase = clean_phrase(raw)
             if phrase:
@@ -325,7 +304,6 @@ def extract_phrases(token_data, full_text, original_text=None, offset_map=None):
                 span_end = end
                 cur_confs.append(conf)
             else:
-                # orphan I-REQ — treat as start of new span to maximise recall
                 span_start = start
                 span_end = end
                 cur_confs = [conf]
@@ -341,7 +319,6 @@ def extract_phrases(token_data, full_text, original_text=None, offset_map=None):
     seen = {}
     for text, conf, idx in phrases:
         words = text.split()
-        # Drop single words under 5 chars UNLESS they are uppercase acronyms (e.g. MIT, GPL, ZPL)
         is_acronym = len(words) == 1 and bool(re.match(r'^[A-Z0-9][A-Z0-9\-\.]+$', text))
         if len(words) == 1 and len(text) < 5 and not is_acronym:
             continue
@@ -352,8 +329,6 @@ def extract_phrases(token_data, full_text, original_text=None, offset_map=None):
 
     # FIX 1+3: subset filter — only suppress a phrase if it is BOTH a word-subset
     # AND overlaps in character position with the longer phrase.
-    # Phrases at different positions that share words (e.g. "GNU General Public License"
-    # appearing twice in a dual-license rule) must NOT be suppressed.
     filtered = []
     for p1 in unique_phrases:
         text1, conf1, idx1 = p1
@@ -368,16 +343,12 @@ def extract_phrases(token_data, full_text, original_text=None, offset_map=None):
             words2 = set(text2.lower().split())
             len2 = len(text2)
 
-            # word-set subset check (same as before)
             word_subset = text1.lower() in text2.lower() or (
                 words1.issubset(words2) and len(words1) < len(words2)
             )
             if not word_subset:
                 continue
 
-            # FIX 1+3: additionally require character-position overlap
-            # p1 span: [idx1, idx1+len1), p2 span: [idx2, idx2+len2)
-            # overlap exists if intervals intersect
             overlap = idx1 < (idx2 + len2) and idx2 < (idx1 + len1)
             if overlap:
                 is_sub = True
@@ -393,27 +364,24 @@ def clean_phrase(phrase):
     """Normalise a raw phrase span: strip junk, stopwords, balance parens."""
     phrase = PUNCT_STRIP_RE.sub('', phrase).strip()
 
-    # strip leading/trailing stopwords
+    # FIX 2+7: unified leading trim — single loop over STOPWORDS | LEFT_BOUNDARY_STOPWORDS
+    # prevents staggered-loop bug where stripping "Licensed" exposes "under" which
+    # was never re-checked (e.g. "Licensed under Apache License" -> "Apache License")
+    LEADING_ALL = STOPWORDS | LEFT_BOUNDARY_STOPWORDS
     words = phrase.split()
-    while words and words[0].lower().rstrip(',:;') in STOPWORDS:
+    while words and words[0].lower().rstrip(',:;') in LEADING_ALL:
         words = words[1:]
     while words and words[-1].lower().lstrip(',:;') in STOPWORDS:
         words = words[:-1]
     phrase = ' '.join(words)
 
-    # FIX 2: strip leading legal boundary words that are never the start of a
-    # required phrase (e.g. "LICENSE LGPL-2.0-or-later" -> "LGPL-2.0-or-later")
-    words = phrase.split()
-    while words and words[0].lower().rstrip(',:;') in LEFT_BOUNDARY_STOPWORDS:
-        words = words[1:]
-    phrase = ' '.join(words)
+    if not phrase:
+        return ''
 
     # strip XML remnants like </name or </comments
     phrase = re.sub(r'</[a-zA-Z]+$', '', phrase)
 
-    # balance matching pairs — an unbalanced closing bracket usually means we captured
-    # the start of a Markdown link: `License](http...`
-    # an unbalanced opening bracket usually means we captured garbage before the license
+    # balance matching pairs
     while phrase.count(')') > phrase.count('('):
         idx = phrase.rfind(')')
         phrase = phrase[:idx]
@@ -457,7 +425,6 @@ def process_rule(rule, model, tokenizer, dry_run=False, verbose=False):
     if not rule_type or not clean_text.strip():
         return None
 
-    # URL-only and very short rules have high FP rates — skip
     if re.fullmatch(r'https?://\S+', clean_text.strip()):
         return None
     if len(clean_text.split()) < 3:
@@ -472,7 +439,6 @@ def process_rule(rule, model, tokenizer, dry_run=False, verbose=False):
             print('  Rule contains no recognizable license identifiers.')
         return None
 
-    # reverse sort by char position so earlier offsets aren't shifted by injection
     phrases.sort(key=lambda x: x[2], reverse=True)
 
     result = {
@@ -732,7 +698,6 @@ def process_interactive(model, tokenizer, limit=None, dry_run=False):
                 conf = phrase_info['confidence']
                 tier = phrase_info['tier']
 
-                # reload from disk — in-memory text is stale after injection
                 try:
                     rule = Rule.from_file(str(rule_file))
                 except Exception as e:
@@ -742,7 +707,6 @@ def process_interactive(model, tokenizer, limit=None, dry_run=False):
                 tier_color = 'green' if tier == 'auto' else 'yellow'
                 original = rule.text or ''
 
-                # case-insensitive replacement for preview diff
                 injected = _case_insensitive_replace(
                     original, phrase_text, '{{{{{0}}}}}',
                 )
