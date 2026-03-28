@@ -1,16 +1,12 @@
 # review_ui/app.py
 #
-# Streamlit demo for scancode required phrase prediction.
-# Deployed on HuggingFace Spaces as a live demo link for the proposal.
-#
-# Run locally: streamlit run app.py
-# (from scancode-toolkit root so add_ml_phrases.py is importable)
+# final code for streamlit demo in GSOC proposal
+
 import traceback
 import re
 import sys
 import html
 from pathlib import Path
-
 import streamlit as st
 
 st.set_page_config(
@@ -19,7 +15,7 @@ st.set_page_config(
     layout="centered",
 )
 
-# ── model pre-warm on boot ───────────────────────────────────────────────────
+# Cache model to prevent reloading on every UI interaction
 @st.cache_resource(show_spinner="Loading model weights...")
 def get_cached_model():
     from transformers import AutoTokenizer, AutoModelForTokenClassification
@@ -35,12 +31,9 @@ def get_cached_model():
     
     return model, tokenizer
 
-# ── example rules for quick testing ──────────────────────────────────────────
-# Row 1: auto-tier showcase — multi-span, different families, different formats
-# Row 2: review/low tiers — honest confidence, diverse rule types
+
+# Test cases for the UI
 EXAMPLES = {
-    # Row 1 — auto tier
-    # dual-license multi-span — showcases BIO multi-span extraction
     "LGPL-2 · GPL-2 (dual)": (
         "is_license_notice",
         "This library is free software; you can redistribute it and/or\n"
@@ -57,27 +50,20 @@ EXAMPLES = {
         "On Debian systems, the complete text of the GNU General Public\n"
         "License can be found in /usr/share/common-licenses/GPL-2 file."
     ),
-    # short SPDX reference — different license family, high confidence
     "OLDAP-2.5": (
         "is_license_reference",
         "OLDAP-2.5 https://spdx.org/licenses/OLDAP-2.5"
     ),
-    # HTML-wrapped rule — showcases HTML stripping pre-processing
+    "MIT Notice": (
+        "is_license_notice",
+        "This software is released under the MIT License."
+    ),
     "LGPL (HTML rule)": (
         "is_license_notice",
         "<p>This library is free software; you can redistribute it and/or modify it under the terms of the "
         "GNU Lesser General Public License as published by the Free Software Foundation; either version 2 of "
         "the License, or (at your option) any later version.</p>"
     ),
-    # OCaml comment-style — showcases comment prefix stripping
-    "LGPL (OCaml comment)": (
-        "is_license_notice",
-        "This file is distributed    *)\n"
-        "(*  under the terms of the GNU Library General Public License, with    *)\n"
-        "(*  the special exception on linking described in file ../LICENSE."
-    ),
-    # Row 2 — review/low tiers
-    # triple-license — 3 different families, review tier
     "GPL · LGPL · MPL (triple)": (
         "is_license_notice",
         "Licensed under the terms of any of the following licenses at your choice:\n"
@@ -88,17 +74,16 @@ EXAMPLES = {
         " - Mozilla Public License Version 1.1 or later (the \"MPL\")\n"
         "   http://www.mozilla.org/MPL/MPL-1.1.html"
     ),
-    # MIT — different family, review tier
-    "MIT Notice": (
-        "is_license_notice",
-        "This software is released under the MIT License."
-    ),
-    # SPDX tag rule type — different rule type
     "SPDX Tag": (
         "is_license_tag",
         "SPDXLicenseIdentifier: LGPL-2.0-or-later"
     ),
-    # low confidence — transparent about model limits
+    "LGPL (OCaml comment)": (
+        "is_license_notice",
+        "This file is distributed    *)\n"
+        "(* under the terms of the GNU Library General Public License, with    *)\n"
+        "(* the special exception on linking described in file ../LICENSE."
+    ),
     "Ambiguous": (
         "is_license_notice",
         "derived from ICU (http://www.icu-project.org)\n"
@@ -109,7 +94,9 @@ EXAMPLES = {
 
 TIER_COLOR = {"auto": "#22c55e", "review": "#f59e0b", "reject": "#ef4444"}
 TIER_LABEL = {"auto": "Auto-Approvable", "review": "Requires Manual Review", "reject": "Low Confidence / Skip"}
+
 def highlight_phrase(rule_text, phrase):
+    """Safely escapes HTML and highlights the exact matched phrase within the original text."""
     safe_text   = html.escape(rule_text)
     safe_phrase = html.escape(phrase)
     escaped     = re.escape(safe_phrase).replace(r"\ ", r"\s+")
@@ -122,6 +109,7 @@ def highlight_phrase(rule_text, phrase):
     return highlighted.replace("\n", "<br>")
 
 def make_diff(original, phrase):
+    """Generates a color-coded HTML diff showing the injection of {{ }} markers."""
     import difflib
     injected   = original.replace(phrase, f"{{{{{phrase}}}}}", 1)
     orig_lines = original.splitlines(keepends=True)
@@ -141,7 +129,8 @@ def make_diff(original, phrase):
             lines.append(f'<span style="color:#94a3b8">{esc}</span>')
     return "<br>".join(lines)
 
-# ── header ────────────────────────────────────────────────────────────────────
+
+# UI Header
 st.markdown(
     "<div style='margin-bottom:2px'>"
     "<span style='font-size:0.8em;color:#64748b;letter-spacing:0.06em'>"
@@ -159,22 +148,24 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.caption(
-    "predicts the required phrase boundary in a `.RULE` file to prevent false positive license detections. "
-    "made with a finetuned DeBERTa-v3-large model"
+    "Predicts the required phrase boundary in a `.RULE` file to prevent false positive license detections. "
+    "Powered by a finetuned DeBERTa-v3-large model."
 )
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ── example loader ────────────────────────────────────────────────────────────
+# Example Selection Grid
 st.markdown("**Try an example:**")
 example_items = list(EXAMPLES.items())
 row1 = example_items[:4]
 row2 = example_items[4:]
+
 cols1 = st.columns(4)
 for col, (label, (rtype, rtext)) in zip(cols1, row1):
     if col.button(label, use_container_width=True):
         st.session_state["rule_type"] = rtype
         st.session_state["rule_text"] = rtext
+
 cols2 = st.columns(4)
 for col, (label, (rtype, rtext)) in zip(cols2, row2):
     if col.button(label, use_container_width=True):
@@ -183,7 +174,7 @@ for col, (label, (rtype, rtext)) in zip(cols2, row2):
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ── input ─────────────────────────────────────────────────────────────────────
+# Main Input Form
 rule_type = st.session_state.get("rule_type", "is_license_notice")
 
 rule_text = st.text_area(
@@ -198,13 +189,12 @@ st.caption("Note: Paste only the plain text body. Exclude YAML frontmatter and t
 
 predict_btn = st.button("Predict Required Phrase", type="primary", use_container_width=True)
 
-# ── inference ─────────────────────────────────────────────────────────────────
+# Inference Logic
 if predict_btn and rule_text.strip():
     with st.spinner("Running inference..."):
         try:
             from add_ml_phrases import run_inference, extract_phrases
             model, tokenizer = get_cached_model()
-            import re
             
             if re.fullmatch(r'https?://\S+', rule_text.strip()):
                 st.info('URL-only rules are skipped — model cannot extract phrases from bare URLs.')
@@ -215,6 +205,7 @@ if predict_btn and rule_text.strip():
             )
             phrases_raw = extract_phrases(token_data, clean_text, original_text, offset_map)
 
+            # Deduplicate keeping highest confidence
             seen = {}
             for text, conf, idx in phrases_raw:
                 if text not in seen or conf > seen[text][1]:
@@ -270,11 +261,11 @@ if predict_btn and rule_text.strip():
 elif predict_btn:
     st.warning("Please enter some rule text first.")
 
-# ── footer ────────────────────────────────────────────────────────────────────
+# Footer
 st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown(
     "<div style='color:#475569;font-size:0.78em;text-align:center'>"
-    "Finetuned model : <a href='https://huggingface.co/Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large' "
+    "Finetuned model: <a href='https://huggingface.co/Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large' "
     "style='color:#475569'>scancode-required-phrases-deberta-large</a><br>"
     "GitHub: <a href='https://github.com/Kaushik-Kumar-CEG' style='color:#475569'>Kaushik-Kumar-CEG</a>"
     "</div>",
