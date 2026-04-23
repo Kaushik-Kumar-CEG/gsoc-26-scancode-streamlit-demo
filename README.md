@@ -10,3 +10,7 @@ The application uses my fine-tuned model (`Kaushik-Kumar-CEG/scancode-required-p
     * *Note: The command-line interface (CLI) logic at the bottom of this file has been commented out, as this script is currently being imported as a module by the Streamlit app rather than run directly from the terminal*
 * **`requirements.txt`**: The specific Python dependencies required to run the Hugging Face model and Streamlit locally
 * **`.devcontainer/devcontainer.json`**: Configuration for running this project seamlessly in cloud environments like GitHub Codespaces
+
+## License
+* The code in this repository is licensed under the [Apache License 2.0](LICENSE).
+* The fine-tuned model weights hosted on HuggingFace are licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).
