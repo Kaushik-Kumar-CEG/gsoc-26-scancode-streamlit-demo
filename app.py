@@ -11,6 +11,7 @@ from predictor import load_predictor
 from predictor import model_summary
 from presentation import confidence_label
 from presentation import highlighted_tokens
+from presentation import review_diff
 
 
 st.set_page_config(
@@ -23,38 +24,56 @@ logger = logging.getLogger(__name__)
 
 
 EXAMPLES = {
-    "MIT notice": "This software is released under the MIT License.",
-    "Apache notice": (
-        "Licensed under the Apache License, Version 2.0. You may obtain a copy "
-        "of the License at http://www.apache.org/licenses/LICENSE-2.0."
+    "LGPL and GPL": (
+        "This library is free software; you can redistribute it and/or modify "
+        "it under the terms of the GNU Library General Public License as "
+        "published by the Free Software Foundation; either version 2 of the "
+        "License, or at your option any later version. However, some parts are "
+        "licensed under the GNU General Public License as published by the Free "
+        "Software Foundation; either version 2 of the License, or at your option "
+        "any later version."
     ),
-    "SPDX tag": "SPDX-License-Identifier: LGPL-2.0-or-later",
-    "BSD reference": "This code is distributed under the BSD 3-Clause License.",
-    "LGPL notice": (
+    "GPL, LGPL and MPL": (
+        "Licensed under your choice of the GNU General Public License Version 2 "
+        "or later, the GNU Lesser General Public License Version 2.1 or later, "
+        "or the Mozilla Public License Version 1.1 or later."
+    ),
+    "Apache notice": (
+        "Licensed under the Apache License, Version 2.0. You may not use this "
+        "file except in compliance with the License. You may obtain a copy at "
+        "http://www.apache.org/licenses/LICENSE-2.0."
+    ),
+    "LGPL full notice": (
         "This library is free software; you can redistribute it and/or modify it "
         "under the terms of the GNU Lesser General Public License as published "
         "by the Free Software Foundation; either version 2.1 of the License, or "
         "at your option any later version."
     ),
-    "GPL notice": (
+    "GPL full notice": (
         "This program is free software; you can redistribute it and/or modify "
         "it under the terms of the GNU General Public License as published by "
-        "the Free Software Foundation; either version 2 of the License, or any "
-        "later version."
-    ),
-    "Dual license": (
-        "This library may be used under the terms of the GNU Lesser General "
-        "Public License version 2.1 or, at your option, under the terms of the "
-        "GNU General Public License version 2."
+        "the Free Software Foundation; either version 2 of the License, or at "
+        "your option any later version."
     ),
     "Mozilla notice": (
         "The contents of this file are subject to the Mozilla Public License "
-        "Version 1.1."
+        "Version 1.1. You may not use this file except in compliance with the "
+        "License."
     ),
-    "URL only": "https://opensource.org/licenses/MIT",
-    "No clear phrase": (
-        "The full license terms are available in the documentation supplied "
-        "with this package."
+    "OCaml comment": (
+        "This file is distributed    *)\n"
+        "(* under the terms of the GNU Library General Public License, with    *)\n"
+        "(* the special exception on linking described in file ../LICENSE."
+    ),
+    "HTML rule": (
+        "<p>This library is free software; you can redistribute it and/or modify "
+        "it under the terms of the GNU Lesser General Public License as "
+        "published by the Free Software Foundation.</p>"
+    ),
+    "SPDX tag": "SPDX-License-Identifier: LGPL-2.0-or-later",
+    "Ambiguous reference": (
+        "Derived from ICU. The full license is available from the project "
+        "website and in the documentation supplied with this package."
     ),
 }
 
@@ -152,6 +171,7 @@ def main():
         )
 
     st.markdown("### Suggested required phrases")
+    st.caption("Review each candidate before using it in a ScanCode rule.")
     if not result.phrases:
         st.info("No required phrase was suggested for this text.")
     else:
@@ -170,12 +190,14 @@ def main():
             unsafe_allow_html=True,
         )
 
+        st.markdown("#### Review diff")
+        st.code(review_diff(result.words, result.phrases), language="diff")
+        st.caption("The preview uses the normalized tokens seen by the model.")
+
     try:
         show_model_details(model_summary(model_dir), model_id)
     except (KeyError, OSError, ValueError):
         st.caption(f"Model artifact: `{model_id}`")
-
-    st.caption("Model suggestions should be reviewed before updating a ScanCode rule.")
 
 
 if __name__ == "__main__":

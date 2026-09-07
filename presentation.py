@@ -1,5 +1,6 @@
-"""Presentation helpers for the read-only demo."""
+"""Presentation helpers for the required-phrase demo."""
 
+import difflib
 import html
 
 
@@ -16,6 +17,32 @@ def confidence_label(confidence):
         if confidence >= threshold:
             return label
     raise AssertionError("confidence thresholds must cover zero")
+
+
+def marker_preview(words, phrases):
+    """Return normalized model tokens with candidate markers inserted."""
+    starts = {phrase.start_word for phrase in phrases}
+    ends = {phrase.end_word for phrase in phrases}
+    marked = []
+    for index, word in enumerate(words):
+        prefix = "{{" if index in starts else ""
+        suffix = "}}" if index in ends else ""
+        marked.append(f"{prefix}{word}{suffix}")
+    return " ".join(marked)
+
+
+def review_diff(words, phrases):
+    """Return a review-style diff of the normalized model tokens."""
+    before = " ".join(words) + "\n"
+    after = marker_preview(words, phrases) + "\n"
+    return "".join(
+        difflib.unified_diff(
+            before.splitlines(keepends=True),
+            after.splitlines(keepends=True),
+            fromfile="rule text",
+            tofile="candidate preview",
+        )
+    )
 
 
 def highlighted_tokens(words, phrases):

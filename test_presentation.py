@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 from presentation import confidence_label
 from presentation import highlighted_tokens
+from presentation import review_diff
 
 
 def phrase(start, end):
@@ -23,6 +24,16 @@ def test_highlights_all_candidate_spans():
     assert rendered == (
         "Use <mark>MIT License</mark> or <mark>Apache License</mark>"
     )
+
+
+def test_review_diff_marks_all_candidates():
+    diff = review_diff(
+        ("Use", "MIT", "License", "or", "Apache", "License"),
+        (phrase(1, 2), phrase(4, 5)),
+    )
+
+    assert "-Use MIT License or Apache License" in diff
+    assert "+Use {{MIT License}} or {{Apache License}}" in diff
 
 
 def test_escapes_untrusted_rule_text():
