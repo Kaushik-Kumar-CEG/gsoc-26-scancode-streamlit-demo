@@ -25,13 +25,9 @@ logger = logging.getLogger(__name__)
 
 EXAMPLES = {
     "LGPL and GPL": (
-        "This library is free software; you can redistribute it and/or modify "
-        "it under the terms of the GNU Library General Public License as "
-        "published by the Free Software Foundation; either version 2 of the "
-        "License, or at your option any later version. However, some parts are "
-        "licensed under the GNU General Public License as published by the Free "
-        "Software Foundation; either version 2 of the License, or at your option "
-        "any later version."
+        "This software is dual licensed under the GNU Lesser General Public "
+        "License Version 2.1 or later and the GNU General Public License "
+        "Version 2 or later."
     ),
     "GPL, LGPL and MPL": (
         "Licensed under your choice of the GNU General Public License Version 2 "
@@ -43,17 +39,13 @@ EXAMPLES = {
         "file except in compliance with the License. You may obtain a copy at "
         "http://www.apache.org/licenses/LICENSE-2.0."
     ),
-    "LGPL full notice": (
-        "This library is free software; you can redistribute it and/or modify it "
-        "under the terms of the GNU Lesser General Public License as published "
-        "by the Free Software Foundation; either version 2.1 of the License, or "
-        "at your option any later version."
+    "LGPL reference": (
+        "This file is licensed under the GNU Lesser General Public License "
+        "Version 2.1 or later."
     ),
-    "GPL full notice": (
-        "This program is free software; you can redistribute it and/or modify "
-        "it under the terms of the GNU General Public License as published by "
-        "the Free Software Foundation; either version 2 of the License, or at "
-        "your option any later version."
+    "GPL reference": (
+        "This program is licensed under the GNU General Public License "
+        "Version 2 or later."
     ),
     "Mozilla notice": (
         "The contents of this file are subject to the Mozilla Public License "
@@ -61,9 +53,8 @@ EXAMPLES = {
         "License."
     ),
     "OCaml comment": (
-        "This file is distributed    *)\n"
-        "(* under the terms of the GNU Library General Public License, with    *)\n"
-        "(* the special exception on linking described in file ../LICENSE."
+        "(* Distributed under the GNU Library General Public License "
+        "Version 2 or later. *)"
     ),
     "HTML rule": (
         "<p>This library is free software; you can redistribute it and/or modify "
