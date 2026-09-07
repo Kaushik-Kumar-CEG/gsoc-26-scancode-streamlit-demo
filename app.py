@@ -1,3 +1,4 @@
+import logging
 import os
 
 os.environ.setdefault("USE_TF", "0")
@@ -17,6 +18,9 @@ st.set_page_config(
     page_icon="🔎",
     layout="centered",
 )
+
+logger = logging.getLogger(__name__)
+
 
 EXAMPLES = {
     "MIT notice": "This software is released under the MIT License.",
@@ -133,8 +137,12 @@ def main():
         predictor, model_dir = cached_predictor(model_id, revision, token)
         with st.spinner("Finding candidate phrases..."):
             result = predictor.predict(text)
-    except Exception:
-        st.error("The model could not be loaded. Check the app configuration and try again.")
+    except Exception as error:
+        logger.exception("Model loading or inference failed")
+        st.error(
+            "The model could not be loaded. Check the app configuration and try again. "
+            f"Error type: {type(error).__name__}."
+        )
         return
 
     if result.truncated:
