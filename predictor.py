@@ -2,6 +2,8 @@
 
 import json
 import os
+import shutil
+import tempfile
 from pathlib import Path
 
 from huggingface_hub import snapshot_download
@@ -16,20 +18,45 @@ DEFAULT_MODEL_REVISION = "11215925b0f9b64cfcfbbb5492b52d6aeb5a572b"
 
 
 def resolve_model_dir(model_id=None, token=None):
-    """Download one immutable model snapshot and return its local directory."""
+    """Download one immutable model snapshot and return its model files only."""
     model_id = model_id or os.environ.get("MODEL_ID", DEFAULT_MODEL_ID)
     local_path = Path(model_id)
     if local_path.is_dir():
         return local_path
 
     revision = os.environ.get("MODEL_REVISION", DEFAULT_MODEL_REVISION)
-    return Path(
+    snapshot = Path(
         snapshot_download(
             repo_id=model_id,
             revision=revision,
             token=token,
         )
     )
+    marker = json.loads((snapshot / "SUCCESS.json").read_text(encoding="utf-8"))
+    names = ["SUCCESS.json", *marker["files"]]
+    if any(len(Path(name).parts) != 1 for name in names):
+        raise ValueError("Success_Marker contains an invalid artifact path")
+
+    target = Path.home() / ".cache" / "scancode-required-phrases" / revision
+    if target.is_dir() and {path.name for path in target.iterdir()} == set(names):
+        return target
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f"{revision}.", dir=target.parent))
+    try:
+        for name in names:
+            source = snapshot / name
+            try:
+                os.link(source, staging / name)
+            except OSError:
+                shutil.copy2(source, staging / name)
+        if target.exists():
+            shutil.rmtree(target)
+        staging.replace(target)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return target
 
 
 def load_predictor(model_id=None, token=None):
