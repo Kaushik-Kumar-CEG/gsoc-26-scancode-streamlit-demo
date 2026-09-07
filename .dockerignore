@@ -1,0 +1,9 @@
+.git
+.github
+.devcontainer
+.streamlit
+__pycache__
+.pytest_cache
+*.pyc
+*.pyo
+*.log
