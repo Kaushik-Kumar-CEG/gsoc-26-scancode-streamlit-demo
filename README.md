@@ -1,16 +1,76 @@
-# Note to maintainers - Scancode Required Phrase Predictor (Streamlit Demo)
+# ScanCode required-phrase model demo
 
-This repository contains the code for Streamlit app for my GSoC 2026 proposal to AboutCode organization (scancode-toolkit)
+A small, read-only Streamlit interface for maintainers to test the GSoC 2026
+required-phrase model on license-rule text.
 
-The application uses my fine-tuned model (`Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large`)
+The application displays candidate phrase spans and model confidence. It does
+not edit ScanCode rules or approve predictions. Every candidate still requires
+human review because an incorrect required phrase can suppress a valid license
+detection.
 
-## Files
-* **`app.py`**: The main Streamlit web application. It handles the UI, pre-caches the model weights, processes the example inputs and displays the color-coded diff results
-* **`add_ml_phrases.py`**: The core ML inference script. This contains all the logic for text preprocessing, ONNX model loading, token extraction and boundary math
-    * *Note: The command-line interface (CLI) logic at the bottom of this file has been commented out, as this script is currently being imported as a module by the Streamlit app rather than run directly from the terminal*
-* **`requirements.txt`**: The specific Python dependencies required to run the Hugging Face model and Streamlit locally
-* **`.devcontainer/devcontainer.json`**: Configuration for running this project seamlessly in cloud environments like GitHub Codespaces
+## Model contract
 
-## License
-* The code in this repository is licensed under the [Apache License 2.0](LICENSE).
-* The fine-tuned model weights hosted on HuggingFace are licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).
+The demo deliberately contains no independent inference implementation. It uses
+`scancode_required_phrases.inference.RequiredPhrasePredictor`, which:
+
+- validates `SUCCESS.json` and every artifact hash;
+- loads the hardened BIOES and constrained-CRF model offline;
+- uses the same word tokenization and decoding contract as training; and
+- returns candidates without changing files.
+
+The default model repository is:
+
+`Kaushik-Kumar-CEG/scancode-required-phrases-deberta-bioes-crf-hardened`
+
+The final model is still training. Until it has been verified and uploaded, UI
+and unit tests can run but live inference is expected to report that the model
+cannot be loaded.
+
+## Local development
+
+Use Python 3.10 or newer. Install the hardened package source and then the demo:
+
+```bash
+python -m pip install -e ../scancode-required-phrases[training]
+python -m pip install streamlit==1.54.0
+streamlit run app.py
+```
+
+For a local final model directory:
+
+```bash
+MODEL_ID=/path/to/final-model streamlit run app.py
+```
+
+For the private Hugging Face repository, set `HF_TOKEN` in the environment. Do
+not commit tokens or `.streamlit/secrets.toml`.
+
+Run the lightweight UI tests with:
+
+```bash
+pytest -q test_presentation.py
+```
+
+## Streamlit Community Cloud
+
+Configure these secrets/settings after the final artifact is verified:
+
+- `HF_TOKEN`: read access to the private model, if it remains private.
+- `MODEL_REVISION`: optional override for the pinned verified commit.
+- `MODEL_ID`: optional override for the default repository.
+
+The checked-in default model revision is
+`11215925b0f9b64cfcfbbb5492b52d6aeb5a572b`.
+
+The application caches the validated model process-wide with
+`st.cache_resource`. DeBERTa-v3-large may exceed Community Cloud resource
+limits; verify a cold start before sharing the link. If it does not fit, keep
+this UI and host the same canonical predictor on a suitable CPU/GPU service.
+
+## Safety
+
+This is a model evaluation interface, not the ScanCode review/apply command.
+Actual rule changes must use the validation, preview, human-review, and apply
+workflow developed in ScanCode Toolkit PRs #5262 and #5267.
+
+Licensed under the Apache License 2.0. See `LICENSE`.

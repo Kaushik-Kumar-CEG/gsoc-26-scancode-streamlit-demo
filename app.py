@@ -1,273 +1,144 @@
-# review_ui/app.py
-#
-# final code for streamlit demo in GSOC proposal
+import os
 
-import traceback
-import re
-import sys
-import html
-from pathlib import Path
+os.environ.setdefault("USE_TF", "0")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 import streamlit as st
 
+from predictor import DEFAULT_MODEL_ID
+from predictor import load_predictor
+from predictor import model_summary
+from presentation import confidence_label
+from presentation import highlighted_tokens
+
+
 st.set_page_config(
-    page_title="Scancode Required Phrases",
-    page_icon="🔍",
+    page_title="ScanCode required-phrase model",
+    page_icon="🔎",
     layout="centered",
 )
 
-# Cache model to prevent reloading on every UI interaction
-@st.cache_resource(show_spinner="Loading model weights...")
-def get_cached_model():
-    from transformers import AutoTokenizer, AutoModelForTokenClassification
-    import torch
-    
-    MODEL_ID = "Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large"
-    
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    model = AutoModelForTokenClassification.from_pretrained(
-        MODEL_ID,
-        torch_dtype=torch.float16
-    )
-    
-    return model, tokenizer
-
-
-# Test cases for the UI
 EXAMPLES = {
-    "LGPL-2 · GPL-2 (dual)": (
-        "is_license_notice",
-        "This library is free software; you can redistribute it and/or\n"
-        "modify it under the terms of the GNU Library General Public\n"
-        "License as published by the Free Software Foundation; either\n"
-        "version 2 of the License, or (at your option) any later version.\n\n"
-        "On Debian systems, the complete text of the GNU Library General Public\n"
-        "License can be found in /usr/share/common-licenses/LGPL-2 file.\n\n"
-        "However, many parts of this library are licensed differently:\n\n"
-        "This program is free software; you can redistribute it and/or\n"
-        "modify it under the terms of the GNU General Public License as\n"
-        "published by the Free Software Foundation; either version 2 of the\n"
-        "License, or (at your option) any later version.\n\n"
-        "On Debian systems, the complete text of the GNU General Public\n"
-        "License can be found in /usr/share/common-licenses/GPL-2 file."
-    ),
-    "OLDAP-2.5": (
-        "is_license_reference",
-        "OLDAP-2.5 https://spdx.org/licenses/OLDAP-2.5"
-    ),
-    "MIT Notice": (
-        "is_license_notice",
-        "This software is released under the MIT License."
-    ),
-    "LGPL (HTML rule)": (
-        "is_license_notice",
-        "<p>This library is free software; you can redistribute it and/or modify it under the terms of the "
-        "GNU Lesser General Public License as published by the Free Software Foundation; either version 2 of "
-        "the License, or (at your option) any later version.</p>"
-    ),
-    "GPL · LGPL · MPL (triple)": (
-        "is_license_notice",
-        "Licensed under the terms of any of the following licenses at your choice:\n"
-        " - GNU General Public License Version 2 or later (the \"GPL\")\n"
-        "   http://www.gnu.org/licenses/gpl.html\n"
-        " - GNU Lesser General Public License Version 2.1 or later (the \"LGPL\")\n"
-        "   http://www.gnu.org/licenses/lgpl.html\n"
-        " - Mozilla Public License Version 1.1 or later (the \"MPL\")\n"
-        "   http://www.mozilla.org/MPL/MPL-1.1.html"
-    ),
-    "SPDX Tag": (
-        "is_license_tag",
-        "SPDXLicenseIdentifier: LGPL-2.0-or-later"
-    ),
-    "LGPL (OCaml comment)": (
-        "is_license_notice",
-        "This file is distributed    *)\n"
-        "(* under the terms of the GNU Library General Public License, with    *)\n"
-        "(* the special exception on linking described in file ../LICENSE."
-    ),
-    "Ambiguous": (
-        "is_license_notice",
-        "derived from ICU (http://www.icu-project.org)\n"
-        "The full license is available here:\n"
-        "  http://source.icu-project.org/repos/icu/icu/trunk/license.html"
+    "MIT reference": "This software is released under the MIT License.",
+    "SPDX tag": "SPDX-License-Identifier: LGPL-2.0-or-later",
+    "LGPL notice": (
+        "This library is free software; you can redistribute it and/or modify "
+        "it under the terms of the GNU Lesser General Public License as "
+        "published by the Free Software Foundation; either version 2.1 of the "
+        "License, or (at your option) any later version."
     ),
 }
 
-TIER_COLOR = {"auto": "#22c55e", "review": "#f59e0b", "reject": "#ef4444"}
-TIER_LABEL = {"auto": "Auto-Approvable", "review": "Requires Manual Review", "reject": "Low Confidence / Skip"}
 
-def highlight_phrase(rule_text, phrase):
-    """Safely escapes HTML and highlights the exact matched phrase within the original text."""
-    safe_text   = html.escape(rule_text)
-    safe_phrase = html.escape(phrase)
-    escaped     = re.escape(safe_phrase).replace(r"\ ", r"\s+")
-    
-    highlighted = re.sub(
-        f"({escaped})",
-        r'<mark style="background:#fef3c7;padding:1px 4px;border-radius:3px;color:#92400e;font-weight:bold">\1</mark>',
-        safe_text, flags=re.IGNORECASE, count=1,
+def secret(name):
+    """Read an optional Streamlit secret without requiring a secrets file."""
+    try:
+        return st.secrets.get(name)
+    except FileNotFoundError:
+        return None
+
+
+@st.cache_resource(show_spinner="Loading and validating the model…")
+def cached_predictor(model_id, revision, token):
+    if revision:
+        os.environ["MODEL_REVISION"] = revision
+    return load_predictor(model_id=model_id, token=token)
+
+
+def show_model_details(summary, model_id):
+    with st.expander("Model details"):
+        st.write(f"**Artifact:** `{model_id}`")
+        st.write(f"**Base model:** `{summary['base_model']}`")
+        st.write(f"**Base revision:** `{summary['base_revision']}`")
+        st.write(f"**Selected checkpoint:** `{summary['selected_checkpoint']}`")
+        st.write(f"**Best validation span F1:** `{summary['validation_f1']:.4f}`")
+        st.caption("The complete artifact is hash-validated before it is loaded.")
+
+
+def main():
+    st.title("Required-phrase candidate finder")
+    st.write(
+        "Test the GSoC 2026 model on ScanCode license-rule text. "
+        "The demo is read-only and does not modify rule files."
     )
-    return highlighted.replace("\n", "<br>")
+    st.warning(
+        "Predictions are candidates for human review, not approved annotations. "
+        "A wrong required phrase can suppress a valid license detection."
+    )
 
-def make_diff(original, phrase):
-    """Generates a color-coded HTML diff showing the injection of {{ }} markers."""
-    import difflib
-    injected   = original.replace(phrase, f"{{{{{phrase}}}}}", 1)
-    orig_lines = original.splitlines(keepends=True)
-    new_lines  = injected.splitlines(keepends=True)
-    diff = list(difflib.unified_diff(orig_lines, new_lines,
-                                     fromfile="a/rule.RULE", tofile="b/rule.RULE", lineterm=""))
-    lines = []
-    for line in diff:
-        esc = html.escape(line)
-        if line.startswith("+") and not line.startswith("+++"):
-            lines.append(f'<span style="color:#22c55e;font-weight:bold">{esc}</span>')
-        elif line.startswith("-") and not line.startswith("---"):
-            lines.append(f'<span style="color:#ef4444">{esc}</span>')
-        elif line.startswith("@@"):
-            lines.append(f'<span style="color:#60a5fa">{esc}</span>')
-        else:
-            lines.append(f'<span style="color:#94a3b8">{esc}</span>')
-    return "<br>".join(lines)
+    selected = st.selectbox("Example", ["Custom text", *EXAMPLES])
+    if selected != "Custom text" and st.session_state.get("example") != selected:
+        st.session_state["rule_text"] = EXAMPLES[selected]
+        st.session_state["example"] = selected
 
+    text = st.text_area(
+        "Rule text",
+        key="rule_text",
+        height=220,
+        placeholder="Paste the plain text body of a ScanCode .RULE file",
+    )
+    st.caption("Paste rule text only; omit YAML frontmatter and the `---` separator.")
 
-# UI Header
-st.markdown(
-    "<div style='margin-bottom:2px'>"
-    "<span style='font-size:0.8em;color:#64748b;letter-spacing:0.06em'>"
-    "GSoC 2026 Proposal · AboutCode / scancode-toolkit"
-    "</span></div>",
-    unsafe_allow_html=True,
-)
-st.title("Scancode Required Phrase Extractor")
-st.markdown(
-    "<div style='margin-top:-10px;margin-bottom:16px'>"
-    "<span style='font-size:0.95em;color:#94a3b8'>by "
-    "<a href='https://github.com/Kaushik-Kumar-CEG' style='color:#94a3b8;text-decoration:none'>"
-    "Kaushik Kumar</a></span>"
-    "</div>",
-    unsafe_allow_html=True,
-)
-st.caption(
-    "Predicts the required phrase boundary in a `.RULE` file to prevent false positive license detections. "
-    "Powered by a finetuned DeBERTa-v3-large model."
-)
+    if not st.button("Find candidate phrases", type="primary", use_container_width=True):
+        return
+    if not text.strip():
+        st.info("Enter rule text to run the model.")
+        return
 
-st.markdown("<br>", unsafe_allow_html=True)
+    model_id = os.environ.get("MODEL_ID") or secret("MODEL_ID") or DEFAULT_MODEL_ID
+    revision = os.environ.get("MODEL_REVISION") or secret("MODEL_REVISION")
+    token = os.environ.get("HF_TOKEN") or secret("HF_TOKEN")
 
-# Example Selection Grid
-st.markdown("**Try an example:**")
-example_items = list(EXAMPLES.items())
-row1 = example_items[:4]
-row2 = example_items[4:]
+    try:
+        predictor, model_dir = cached_predictor(model_id, revision, token)
+        with st.spinner("Running inference…"):
+            result = predictor.predict(text)
+    except Exception:
+        st.error(
+            "The verified model could not be loaded or inference failed. "
+            "Check the deployment configuration and try again."
+        )
+        return
 
-cols1 = st.columns(4)
-for col, (label, (rtype, rtext)) in zip(cols1, row1):
-    if col.button(label, use_container_width=True):
-        st.session_state["rule_type"] = rtype
-        st.session_state["rule_text"] = rtext
+    if result.truncated:
+        st.warning(
+            "This input exceeded the model limit. A candidate touching the cut-off "
+            "was omitted. Test a shorter rule before reviewing the result."
+        )
 
-cols2 = st.columns(4)
-for col, (label, (rtype, rtext)) in zip(cols2, row2):
-    if col.button(label, use_container_width=True):
-        st.session_state["rule_type"] = rtype
-        st.session_state["rule_text"] = rtext
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# Main Input Form
-rule_type = st.session_state.get("rule_type", "is_license_notice")
-
-rule_text = st.text_area(
-    "Rule text",
-    height=160,
-    key="rule_text",
-    placeholder="Paste rule text here...",
-    label_visibility="collapsed"
-)
-
-st.caption("Note: Paste only the plain text body. Exclude YAML frontmatter and the `---` separator.")
-
-predict_btn = st.button("Predict Required Phrase", type="primary", use_container_width=True)
-
-# Inference Logic
-if predict_btn and rule_text.strip():
-    with st.spinner("Running inference..."):
-        try:
-            from add_ml_phrases import run_inference, extract_phrases
-            model, tokenizer = get_cached_model()
-            
-            if re.fullmatch(r'https?://\S+', rule_text.strip()):
-                st.info('URL-only rules are skipped — model cannot extract phrases from bare URLs.')
-                st.stop()
-                
-            token_data, clean_text, original_text, offset_map = run_inference(
-                model, tokenizer, rule_type, rule_text
+    st.subheader("Candidates")
+    if not result.phrases:
+        st.info("The model did not identify a required-phrase candidate.")
+    else:
+        for number, phrase in enumerate(result.phrases, 1):
+            st.markdown(f"**{number}. `{phrase.text}`**")
+            st.caption(
+                f"{confidence_label(phrase.confidence)} · "
+                f"model confidence {phrase.confidence:.1%} · "
+                f"words {phrase.start_word + 1}–{phrase.end_word + 1}"
             )
-            phrases_raw = extract_phrases(token_data, clean_text, original_text, offset_map)
 
-            # Deduplicate keeping highest confidence
-            seen = {}
-            for text, conf, idx in phrases_raw:
-                if text not in seen or conf > seen[text][1]:
-                    seen[text] = (text, conf, idx)
-            phrases = list(seen.values())
-            phrases.sort(key=lambda x: x[1], reverse=True)
+        st.markdown("**Model token view**")
+        st.markdown(
+            highlighted_tokens(result.words, result.phrases),
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "Highlighting follows the exact normalized tokens seen by the model; "
+            "it is not an injection preview."
+        )
 
-            if not phrases:
-                st.warning("No recognizable license identifiers found in this rule.")
-            else:
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown(f"**{len(phrases)} candidate phrase(s) found:**")
+    try:
+        show_model_details(model_summary(model_dir), model_id)
+    except (KeyError, OSError, ValueError):
+        st.caption(f"Model artifact: `{model_id}`")
 
-                for phrase_text, conf, _ in phrases:
-                    tier   = "auto" if conf >= 0.95 else ("review" if conf >= 0.60 else "reject")
-                    color  = TIER_COLOR[tier]
-                    label  = TIER_LABEL[tier]
+    st.divider()
+    st.caption(
+        "This interface only displays model output. ScanCode validation and the "
+        "review/apply workflow remain required before changing any rule."
+    )
 
-                    st.markdown(
-                        f'<div style="border-left:3px solid {color};padding:8px 14px;'
-                        f'margin:8px 0;border-radius:0 6px 6px 0;background:#0f172a">'
-                        f'<code style="font-size:1.05em;color:#e2e8f0">{html.escape(phrase_text)}</code>'
-                        f'<br><span style="color:{color};font-size:0.85em;font-weight:600">'
-                        f'{conf:.1%} · {label}</span>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
 
-                best = phrases[0][0]
-
-                st.markdown("<br>**Highlighted in rule text:**", unsafe_allow_html=True)
-                st.markdown(
-                    f'<div style="font-family:monospace;white-space:pre-wrap;font-size:0.9em;'
-                    f'background:#0f172a;color:#e2e8f0;padding:14px;border-radius:6px;'
-                    f'border:1px solid #1e293b;line-height:1.6">'
-                    f'{highlight_phrase(rule_text, best)}</div>',
-                    unsafe_allow_html=True,
-                )
-                
-                st.markdown("<br>**Diff:**", unsafe_allow_html=True)
-                st.markdown(
-                    f'<div style="font-family:monospace;white-space:pre-wrap;font-size:0.85em;'
-                    f'background:#000000;color:#e2e8f0;padding:14px;border-radius:6px;'
-                    f'border:1px solid #334155;line-height:1.6">'
-                    f'{make_diff(rule_text, best)}</div>',
-                    unsafe_allow_html=True,
-                )
-
-        except Exception as e:
-            st.error(f"Error: {e}")
-            st.code(traceback.format_exc(), language="python")
-
-elif predict_btn:
-    st.warning("Please enter some rule text first.")
-
-# Footer
-st.markdown("<br><br>", unsafe_allow_html=True)
-st.markdown(
-    "<div style='color:#475569;font-size:0.78em;text-align:center'>"
-    "Finetuned model: <a href='https://huggingface.co/Kaushik-Kumar-CEG/scancode-required-phrases-deberta-large' "
-    "style='color:#475569'>scancode-required-phrases-deberta-large</a><br>"
-    "GitHub: <a href='https://github.com/Kaushik-Kumar-CEG' style='color:#475569'>Kaushik-Kumar-CEG</a>"
-    "</div>",
-    unsafe_allow_html=True,
-)
+if __name__ == "__main__":
+    main()

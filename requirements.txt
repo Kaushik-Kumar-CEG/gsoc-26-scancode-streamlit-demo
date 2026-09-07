@@ -1,9 +1,3 @@
-streamlit>=1.30.0
-torch>=2.0.0
-optimum[onnxruntime]>=1.16.0
-huggingface-hub>=0.20.0
-transformers>=4.40.0
-onnxruntime>=1.17.0
-numpy>=1.24.0
-rich>=13.0.0
-sentencepiece>=0.1.99
+streamlit==1.54.0
+huggingface-hub==0.36.2
+scancode-required-phrases[training] @ git+https://github.com/aboutcode-org/scancode-required-phrases.git@959e3dfce817eeeaafbeaec402884c313bc5569e
