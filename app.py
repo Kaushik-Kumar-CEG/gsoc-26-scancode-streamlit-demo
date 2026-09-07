@@ -13,19 +13,44 @@ from presentation import highlighted_tokens
 
 
 st.set_page_config(
-    page_title="ScanCode required-phrase model",
+    page_title="GSoC Required Phrases Demo",
     page_icon="🔎",
     layout="centered",
 )
 
 EXAMPLES = {
-    "MIT reference": "This software is released under the MIT License.",
+    "MIT notice": "This software is released under the MIT License.",
+    "Apache notice": (
+        "Licensed under the Apache License, Version 2.0. You may obtain a copy "
+        "of the License at http://www.apache.org/licenses/LICENSE-2.0."
+    ),
     "SPDX tag": "SPDX-License-Identifier: LGPL-2.0-or-later",
+    "BSD reference": "This code is distributed under the BSD 3-Clause License.",
     "LGPL notice": (
-        "This library is free software; you can redistribute it and/or modify "
-        "it under the terms of the GNU Lesser General Public License as "
-        "published by the Free Software Foundation; either version 2.1 of the "
-        "License, or (at your option) any later version."
+        "This library is free software; you can redistribute it and/or modify it "
+        "under the terms of the GNU Lesser General Public License as published "
+        "by the Free Software Foundation; either version 2.1 of the License, or "
+        "at your option any later version."
+    ),
+    "GPL notice": (
+        "This program is free software; you can redistribute it and/or modify "
+        "it under the terms of the GNU General Public License as published by "
+        "the Free Software Foundation; either version 2 of the License, or any "
+        "later version."
+    ),
+    "Dual license": (
+        "This library may be used under the terms of the GNU Lesser General "
+        "Public License version 2.1 or, at your option, under the terms of the "
+        "GNU General Public License version 2."
+    ),
+    "Mozilla notice": (
+        "The contents of this file are subject to the Mozilla Public License "
+        "Version 1.1."
+    ),
+    "URL only": "https://opensource.org/licenses/MIT",
+    "No clear phrase": (
+        "The full license terms are available in the documentation supplied "
+        "with this package."
     ),
 }
 
@@ -38,11 +63,30 @@ def secret(name):
         return None
 
 
-@st.cache_resource(show_spinner="Loading and validating the model…")
+@st.cache_resource(show_spinner="Loading and validating the model...")
 def cached_predictor(model_id, revision, token):
     if revision:
         os.environ["MODEL_REVISION"] = revision
     return load_predictor(model_id=model_id, token=token)
+
+
+def select_example(label):
+    st.session_state["rule_text"] = EXAMPLES[label]
+
+
+def show_examples():
+    st.markdown("#### Try an example")
+    labels = list(EXAMPLES)
+    for start in range(0, len(labels), 2):
+        columns = st.columns(2)
+        for column, label in zip(columns, labels[start : start + 2]):
+            column.button(
+                label,
+                key=f"example_{label}",
+                on_click=select_example,
+                args=(label,),
+                use_container_width=True,
+            )
 
 
 def show_model_details(summary, model_id):
@@ -52,37 +96,33 @@ def show_model_details(summary, model_id):
         st.write(f"**Base revision:** `{summary['base_revision']}`")
         st.write(f"**Selected checkpoint:** `{summary['selected_checkpoint']}`")
         st.write(f"**Best validation span F1:** `{summary['validation_f1']:.4f}`")
-        st.caption("The complete artifact is hash-validated before it is loaded.")
+        st.caption("The model files and recorded hashes are validated before loading.")
 
 
 def main():
-    st.title("Required-phrase candidate finder")
+    st.caption("Google Summer of Code 2026 | AboutCode")
+    st.title("GSoC Required Phrases Demo")
     st.write(
-        "Test the GSoC 2026 model on ScanCode license-rule text. "
-        "The demo is read-only and does not modify rule files."
-    )
-    st.warning(
-        "Predictions are candidates for human review, not approved annotations. "
-        "A wrong required phrase can suppress a valid license detection."
+        "Paste a ScanCode license rule or choose an example to find text that "
+        "may need required phrase markers."
     )
 
-    selected = st.selectbox("Example", ["Custom text", *EXAMPLES])
-    if selected != "Custom text" and st.session_state.get("example") != selected:
-        st.session_state["rule_text"] = EXAMPLES[selected]
-        st.session_state["example"] = selected
+    show_examples()
 
+    st.markdown("#### Rule text")
     text = st.text_area(
         "Rule text",
         key="rule_text",
-        height=220,
+        height=240,
         placeholder="Paste the plain text body of a ScanCode .RULE file",
+        label_visibility="collapsed",
     )
-    st.caption("Paste rule text only; omit YAML frontmatter and the `---` separator.")
+    st.caption("Use the rule text only. Leave out the YAML header and separator.")
 
-    if not st.button("Find candidate phrases", type="primary", use_container_width=True):
+    if not st.button("Find required phrases", type="primary", use_container_width=True):
         return
     if not text.strip():
-        st.info("Enter rule text to run the model.")
+        st.info("Enter rule text or choose an example first.")
         return
 
     model_id = os.environ.get("MODEL_ID") or secret("MODEL_ID") or DEFAULT_MODEL_ID
@@ -91,41 +131,35 @@ def main():
 
     try:
         predictor, model_dir = cached_predictor(model_id, revision, token)
-        with st.spinner("Running inference…"):
+        with st.spinner("Finding candidate phrases..."):
             result = predictor.predict(text)
     except Exception:
-        st.error(
-            "The verified model could not be loaded or inference failed. "
-            "Check the deployment configuration and try again."
-        )
+        st.error("The model could not be loaded. Check the app configuration and try again.")
         return
 
     if result.truncated:
         st.warning(
-            "This input exceeded the model limit. A candidate touching the cut-off "
-            "was omitted. Test a shorter rule before reviewing the result."
+            "This text is longer than the model limit. A phrase at the end may "
+            "not be included in the results."
         )
 
-    st.subheader("Candidates")
+    st.markdown("### Suggested required phrases")
     if not result.phrases:
-        st.info("The model did not identify a required-phrase candidate.")
+        st.info("No required phrase was suggested for this text.")
     else:
         for number, phrase in enumerate(result.phrases, 1):
-            st.markdown(f"**{number}. `{phrase.text}`**")
-            st.caption(
-                f"{confidence_label(phrase.confidence)} · "
-                f"model confidence {phrase.confidence:.1%} · "
-                f"words {phrase.start_word + 1}–{phrase.end_word + 1}"
-            )
+            with st.container(border=True):
+                st.markdown(f"**{number}. `{phrase.text}`**")
+                st.caption(
+                    f"{confidence_label(phrase.confidence)} | "
+                    f"Confidence {phrase.confidence:.1%} | "
+                    f"Words {phrase.start_word + 1} to {phrase.end_word + 1}"
+                )
 
-        st.markdown("**Model token view**")
+        st.markdown("#### Highlighted result")
         st.markdown(
             highlighted_tokens(result.words, result.phrases),
             unsafe_allow_html=True,
-        )
-        st.caption(
-            "Highlighting follows the exact normalized tokens seen by the model; "
-            "it is not an injection preview."
         )
 
     try:
@@ -133,11 +167,7 @@ def main():
     except (KeyError, OSError, ValueError):
         st.caption(f"Model artifact: `{model_id}`")
 
-    st.divider()
-    st.caption(
-        "This interface only displays model output. ScanCode validation and the "
-        "review/apply workflow remain required before changing any rule."
-    )
+    st.caption("Model suggestions should be reviewed before updating a ScanCode rule.")
 
 
 if __name__ == "__main__":
